@@ -28,7 +28,7 @@ due: "${due}"
 tags: [project]
 hours: 0
 task_count: 0
-workspace: "${ws.id}"
+workspace: "[[${ws.name}]]"
 ---
 
 # ${title}
@@ -45,7 +45,7 @@ workspace: "${ws.id}"
     for (const file of files) {
       if (!file.path.startsWith(ws.projectsFolder)) continue;
       const cache = this.app.metadataCache.getFileCache(file);
-      if (cache?.frontmatter?.type === "project" && cache?.frontmatter?.workspace === ws.id) {
+      if (cache?.frontmatter?.type === "project" && cache?.frontmatter?.workspace === `[[${ws.name}]]`) {
         result.push(file);
       }
     }

@@ -29,7 +29,7 @@ created: "${todayString()}"
 due: "${due}"
 total_hours: 0
 days_count: 0
-workspace: "${ws.id}"
+workspace: "[[${ws.name}]]"
 ---
 
 # ${title}
@@ -38,7 +38,6 @@ workspace: "${ws.id}"
 
 | Date | Hours | Start | End |
 |------|-------|-------|-----|
-
 `;
 
     const file = await this.app.vault.create(path, frontmatter);
@@ -51,7 +50,7 @@ workspace: "${ws.id}"
     for (const file of files) {
       if (!file.path.startsWith(ws.tasksFolder)) continue;
       const cache = this.app.metadataCache.getFileCache(file);
-      if (cache?.frontmatter?.type === "task" && cache?.frontmatter?.workspace === ws.id) {
+      if (cache?.frontmatter?.type === "task" && cache?.frontmatter?.workspace === `[[${ws.name}]]`) {
         result.push(file);
       }
     }
