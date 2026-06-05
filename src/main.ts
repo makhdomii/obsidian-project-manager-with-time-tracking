@@ -306,7 +306,7 @@ export default class ProjectManagerPlugin extends Plugin {
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
 }
 .pm-project-card {
-  background: var(--background-secondary);
+  background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 12px;
   padding: 14px;
@@ -314,11 +314,13 @@ export default class ProjectManagerPlugin extends Plugin {
   flex-direction: column;
   gap: 12px;
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  user-select: none;  
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .pm-project-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.18);
 }
 .pm-overdue-card {
   border-color: #e05252;
