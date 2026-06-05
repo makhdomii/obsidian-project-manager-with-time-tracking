@@ -1,4 +1,4 @@
-import { App, Modal, TFile, Notice, Setting } from "obsidian";
+import { App, Modal, TFile, TFolder, Notice, Setting } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
@@ -42,6 +42,20 @@ export class TaskModal extends Modal {
     }
   }
 
+  private getProjectSlugs(): string[] {
+      const projectsPath = `${this.ws.rootFolder}/Projects`;
+      const folder = this.app.vault.getAbstractFileByPath(projectsPath);
+      if (!folder) return [];
+
+      const children = (folder as any).children;
+      if (!Array.isArray(children)) return [];
+
+      return children
+          .filter((f: any) => !Array.isArray(f.children) && f.name?.endsWith(".md"))
+          .map((f: any) => (f.name as string).replace(/\.md$/, ""))
+          .sort();
+  }
+
   onOpen(): void {
     const { contentEl } = this;
     contentEl.empty();
@@ -54,9 +68,24 @@ export class TaskModal extends Modal {
       if (this.isNew) t.inputEl.focus();
     });
 
-    new Setting(contentEl).setName("Project").addText((t) =>
-      t.setPlaceholder("project-slug").setValue(this.projectSlug).onChange((v) => (this.projectSlug = v))
-    );
+    const projects = this.getProjectSlugs();
+    new Setting(contentEl)
+        .setName("Project")
+        .addDropdown((d) => {
+            if (projects.length === 0) {
+                d.addOption("", "— no projects found —");
+            } else {
+                d.addOption("", "— select —");
+                projects.forEach((p) => d.addOption(p, p));
+                if (this.projectSlug && projects.includes(this.projectSlug)) {
+                    d.setValue(this.projectSlug);
+                } else if (projects.length > 0) {
+                    this.projectSlug = projects[0];
+                    d.setValue(projects[0]);
+                }
+            }
+            d.onChange((v) => (this.projectSlug = v));
+        });
 
     new Setting(contentEl).setName("Status").addDropdown((d) => {
       this.plugin.settings.statuses.forEach((s) => d.addOption(s, s));
