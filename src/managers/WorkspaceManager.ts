@@ -1,4 +1,4 @@
-import { App, TFolder, normalizePath } from "obsidian";
+import { App, normalizePath } from "obsidian";
 import { Workspace } from "../types";
 
 export class WorkspaceManager {
@@ -13,8 +13,15 @@ export class WorkspaceManager {
 
   async ensureFolder(path: string): Promise<void> {
     const normalized = normalizePath(path);
-    if (!this.app.vault.getAbstractFileByPath(normalized)) {
-      await this.app.vault.createFolder(normalized);
+    const parts = normalized.split("/").filter(Boolean);
+
+    let current = "";
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      const existing = this.app.vault.getAbstractFileByPath(current);
+      if (!existing) {
+        await this.app.vault.createFolder(current);
+      }
     }
   }
 
