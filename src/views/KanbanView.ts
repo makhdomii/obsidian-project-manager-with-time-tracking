@@ -30,6 +30,19 @@ export class KanbanView extends ItemView {
         if (timerEl) timerEl.textContent = this.plugin.timeTracker.getElapsed();
       }
     }, 1000);
+
+    this.registerEvent(
+        this.app.vault.on("create", () => this.render())
+    );
+    this.registerEvent(
+        this.app.vault.on("modify", () => this.render())
+    );
+    this.registerEvent(
+        this.app.vault.on("delete", () => this.render())
+    );
+    this.registerEvent(
+        this.app.metadataCache.on("resolved", () => this.render())
+    );    
   }
 
   async onClose(): Promise<void> {
