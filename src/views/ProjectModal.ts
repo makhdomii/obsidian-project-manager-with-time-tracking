@@ -102,6 +102,7 @@ export class ProjectModal extends Modal {
       new Notice(`Project saved: ${this.title}`);
     }
     this.plugin.refreshKanban();
+    this.plugin.refreshProjectDashboard();
   }
 
   onClose(): void {

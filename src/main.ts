@@ -6,6 +6,7 @@ import { ProjectManager } from "./managers/ProjectManager";
 import { TaskManager } from "./managers/TaskManager";
 import { TimeTracker } from "./managers/TimeTracker";
 import { KanbanView, KANBAN_VIEW_TYPE } from "./views/KanbanView";
+import { ProjectDashboardView, PROJECT_DASHBOARD_VIEW_TYPE } from "./views/ProjectDashboardView";
 import { TaskModal } from "./views/TaskModal";
 import { ProjectModal } from "./views/ProjectModal";
 
@@ -29,8 +30,9 @@ export default class ProjectManagerPlugin extends Plugin {
       await this.workspaceManager.ensureWorkspace(ws);
     }
 
-    // Register Kanban view
+    // Register views
     this.registerView(KANBAN_VIEW_TYPE, (leaf) => new KanbanView(leaf, this));
+    this.registerView(PROJECT_DASHBOARD_VIEW_TYPE, (leaf) => new ProjectDashboardView(leaf, this));
 
     // Load styles
     this.loadStyles();
@@ -52,6 +54,12 @@ export default class ProjectManagerPlugin extends Plugin {
       id: "new-project",
       name: "New Project",
       callback: () => this.openNewProjectModal(this.getCurrentWorkspace()),
+    });
+
+    this.addCommand({
+      id: "open-project-dashboard",
+      name: "Open Project Dashboard",
+      callback: () => this.openProjectDashboard(),
     });
 
     this.addCommand({
@@ -83,8 +91,9 @@ export default class ProjectManagerPlugin extends Plugin {
       },
     });
 
-    // Ribbon icon
-    this.addRibbonIcon("layout-kanban", "Project Manager", () => this.openKanban());
+    // Ribbon icons for quick access
+    this.addRibbonIcon("folder-open", "Open Kanban Board", () => this.openKanban());
+    this.addRibbonIcon("folder-open", "Open Project Dashboard", () => this.openProjectDashboard());
 
     // Settings tab
     this.addSettingTab(new ProjectManagerSettingTab(this.app, this));
@@ -135,8 +144,30 @@ export default class ProjectManagerPlugin extends Plugin {
     new TaskModal(this.app, this, ws, null).open();
   }
 
+  openProjectModal(file: TFile, ws: Workspace): void {
+    new ProjectModal(this.app, this, ws, file).open();
+  }
+
   openNewProjectModal(ws: Workspace): void {
     new ProjectModal(this.app, this, ws, null).open();
+  }
+
+  openProjectDashboard(): void {
+    const existing = this.app.workspace.getLeavesOfType(PROJECT_DASHBOARD_VIEW_TYPE);
+    if (existing.length > 0) {
+      this.app.workspace.revealLeaf(existing[0]);
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf(false);
+    void leaf.setViewState({ type: PROJECT_DASHBOARD_VIEW_TYPE, active: true });
+    this.app.workspace.revealLeaf(leaf);
+  }
+
+  refreshProjectDashboard(): void {
+    const leaves = this.app.workspace.getLeavesOfType(PROJECT_DASHBOARD_VIEW_TYPE);
+    for (const leaf of leaves) {
+      (leaf.view as ProjectDashboardView).render();
+    }
   }
 
   loadStyles(): void {
@@ -259,6 +290,72 @@ export default class ProjectManagerPlugin extends Plugin {
 .pm-col-cards.pm-drag-over {
   background: var(--background-modifier-hover);
   outline: 2px dashed var(--interactive-accent);
+}
+
+.pm-dashboard-content {
+  padding: 16px;
+}
+.pm-dashboard-empty {
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.pm-project-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+.pm-project-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.pm-project-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.pm-overdue-card {
+  border-color: #e05252;
+}
+.pm-project-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.pm-project-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-normal);
+  line-height: 1.2;
+}
+.pm-project-chip {
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.pm-project-meta {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.pm-project-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pm-project-actions .pm-btn {
+  flex: 1 1 auto;
 }
 
 .pm-task-card {

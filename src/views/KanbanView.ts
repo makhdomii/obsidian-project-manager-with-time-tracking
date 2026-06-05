@@ -243,6 +243,12 @@ export class KanbanView extends ItemView {
         this.plugin.openNewProjectModal(this.currentWorkspace);
       });
 
+    // Project dashboard button
+    toolbar.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Project Dashboard" })
+      .addEventListener("click", () => {
+        this.plugin.openProjectDashboard();
+      });
+
     // Active timer display
     if (this.plugin.timeTracker.isRunning()) {
       const timerBar = toolbar.createDiv({ cls: "pm-timer-bar" });
