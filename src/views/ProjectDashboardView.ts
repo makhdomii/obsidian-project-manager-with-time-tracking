@@ -122,7 +122,7 @@ export class ProjectDashboardView extends ItemView {
     const status = fm.status ?? "not started";
     const overdue = fm.due && fm.due < new Date().toISOString().slice(0, 10) && status !== "done";
 
-    const card = container.createDiv({ cls: "pm-project-card" });
+    const card = container.createDiv({ cls: "pm-task-card" });
     // make draggable like task cards
     card.setAttribute("draggable", "true");
     card.setAttribute("data-path", project.path);
