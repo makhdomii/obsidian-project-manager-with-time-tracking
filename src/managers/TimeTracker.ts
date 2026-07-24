@@ -66,8 +66,14 @@ export class TimeTracker {
     endTime: Date
   ): Promise<void> {
     const stamp = toISOFileStamp(endTime);
-    const path = normalizePath(`${ws.timeEntriesFolder}/time_entry_${stamp}.md`);
     const taskSlug = taskFile.basename;
+    let path = normalizePath(`${ws.timeEntriesFolder}/time_entry_${taskSlug}_${stamp}.md`);
+    
+    let counter = 1;
+    while (this.app.vault.getAbstractFileByPath(path)) {
+      path = normalizePath(`${ws.timeEntriesFolder}/time_entry_${taskSlug}_${stamp}_${counter}.md`);
+      counter++;
+    }
 
     const content = `---
 time_entry: "${toISOFileStamp(endTime)}"
