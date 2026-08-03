@@ -201,6 +201,8 @@ export class ProjectDashboardView extends ItemView {
       const ws = this.plugin.settings.workspaces.find((w) => w.id === wsSelect.value);
       if (ws) {
         this.currentWorkspace = ws;
+        this.plugin.settings.defaultWorkspaceId = ws.id;
+        await this.plugin.saveSettings();
         await this.render();
       }
     });
