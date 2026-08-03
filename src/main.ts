@@ -73,6 +73,7 @@ export default class ProjectManagerPlugin extends Plugin {
         try {
           this.timeTracker.startTimer(file.path, fm.title ?? file.basename, fm.workspace ?? this.settings.defaultWorkspaceId);
           new Notice(`Timer started: ${fm.title}`);
+          this.refreshKanban();
         } catch (err: any) {
           new Notice(err.message);
         }
@@ -202,43 +203,50 @@ export default class ProjectManagerPlugin extends Plugin {
 }
 
 .pm-ws-select, .pm-filter-select, .pm-filter-input {
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 5px 10px;
+  border-radius: 7px;
   border: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
   color: var(--text-normal);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .pm-btn {
-  padding: 5px 14px;
-  border-radius: 6px;
-  border: none;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--background-modifier-border);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  transition: opacity 0.15s;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.05s ease;
 }
-.pm-btn:hover { opacity: 0.85; }
-.pm-btn-primary { background: var(--interactive-accent); color: var(--text-on-accent); }
-.pm-btn-secondary { background: var(--background-modifier-hover); color: var(--text-normal); }
-.pm-btn-danger { background: #e05252; color: #fff; }
+.pm-btn:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.pm-btn:active { transform: translateY(1px); }
+.pm-btn-primary { background: var(--interactive-accent); color: var(--text-on-accent); border-color: transparent; }
+.pm-btn-primary:hover { background: var(--interactive-accent-hover); color: var(--text-on-accent); }
+.pm-btn-secondary { color: var(--text-muted); }
+.pm-btn-danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 45%, var(--background-modifier-border)); }
+.pm-btn-danger:hover { background: color-mix(in srgb, var(--color-red) 14%, transparent); color: var(--color-red); }
 
 .pm-timer-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
-  background: #1a3a2a;
-  border-radius: 8px;
-  color: #7ecfa0;
-  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--interactive-accent) 16%, var(--background-secondary));
+  border: 1px solid color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border));
+  color: var(--text-normal);
+  font-size: 12px;
   margin-left: auto;
 }
+.pm-timer-bar .pm-timer-elapsed { color: var(--interactive-accent); font-weight: 700; }
 
 .pm-kanban-board {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   padding: 16px;
   overflow-x: auto;
   flex: 1;
@@ -250,46 +258,74 @@ export default class ProjectManagerPlugin extends Plugin {
   max-width: 280px;
   flex: 0 0 260px;
   background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
   border-radius: 10px;
-  padding: 10px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+}
+
+.pm-col-strip {
+  height: 3px;
+  background: var(--pm-status-color, var(--background-modifier-border));
+  flex-shrink: 0;
 }
 
 .pm-col-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 6px 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 10px 12px 8px;
 }
 .pm-col-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-normal);
   text-transform: capitalize;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pm-col-title::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pm-status-color, var(--text-faint));
+  flex-shrink: 0;
 }
 .pm-col-count {
-  background: var(--background-modifier-hover);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 700;
   padding: 1px 7px;
-  border-radius: 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
 }
 
 .pm-col-cards {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 60px;
-  border-radius: 6px;
-  padding: 4px;
+  min-height: 50px;
+  padding: 2px 8px 10px;
   transition: background 0.15s;
 }
 .pm-col-cards.pm-drag-over {
-  background: var(--background-modifier-hover);
+  background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
   outline: 2px dashed var(--interactive-accent);
+  border-radius: 6px;
+}
+.pm-col-empty {
+  margin: 2px 4px 8px;
+  padding: 16px 8px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  border: 1.5px dashed var(--background-modifier-border);
+  border-radius: 8px;
 }
 
 .pm-dashboard-content {
@@ -308,22 +344,23 @@ export default class ProjectManagerPlugin extends Plugin {
 .pm-project-card {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 12px;
-  padding: 14px;
+  border-radius: 10px;
+  padding: 12px 13px 11px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-  user-select: none;  
-  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.08);
+  user-select: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
 .pm-project-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0,0,0,0.18);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  background: var(--background-modifier-hover);
 }
 .pm-overdue-card {
-  border-color: #e05252;
+  border-color: color-mix(in srgb, var(--color-red) 55%, var(--background-modifier-border));
 }
 .pm-project-card-header {
   display: flex;
@@ -332,18 +369,20 @@ export default class ProjectManagerPlugin extends Plugin {
   align-items: flex-start;
 }
 .pm-project-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-normal);
-  line-height: 1.2;
+  line-height: 1.3;
 }
 .pm-project-chip {
-  background: var(--background-modifier-hover);
-  color: var(--text-muted);
-  padding: 4px 10px;
+  background: color-mix(in srgb, var(--pm-status-color, var(--text-faint)) 16%, transparent);
+  color: var(--pm-status-color, var(--text-muted));
+  padding: 3px 10px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: capitalize;
+  flex-shrink: 0;
 }
 .pm-project-meta {
   display: grid;
@@ -361,79 +400,145 @@ export default class ProjectManagerPlugin extends Plugin {
 }
 
 .pm-task-card {
+  position: relative;
   background: var(--background-primary);
   border-radius: 8px;
-  padding: 10px 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  padding: 10px 11px 9px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.08);
   cursor: pointer;
   border: 1px solid var(--background-modifier-border);
-  transition: box-shadow 0.15s, transform 0.1s;
+  transition: box-shadow 0.12s ease, transform 0.12s ease, background 0.12s ease;
   user-select: none;
 }
 .pm-task-card:hover {
-  box-shadow: 0 3px 8px rgba(0,0,0,0.18);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  transform: translateY(-2px);
+  background: var(--background-modifier-hover);
+}
+.pm-kanban-board .pm-task-card.pm-task-inactive {
+  opacity: 0.5;
+}
+.pm-kanban-board .pm-task-card.pm-task-inactive:hover {
+  opacity: 0.7;
+}
+.pm-kanban-board .pm-task-card.pm-task-active {
+  border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent), 0 1px 2px rgba(0,0,0,0.14);
+}
+.pm-kanban-board .pm-task-card.pm-task-active::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--interactive-accent);
 }
 .pm-task-card.pm-dragging {
   opacity: 0.5;
   transform: rotate(2deg);
 }
+.pm-card-muted {
+  opacity: 0.55;
+}
+.pm-card-muted:hover {
+  opacity: 0.85;
+}
 
+/* Full text pill — still used on Project Dashboard cards */
 .pm-priority-badge {
   display: inline-block;
   font-size: 10px;
   font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
   margin-bottom: 5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
-.pm-priority-low { background: #2d4a2d; color: #7ecfa0; }
-.pm-priority-medium { background: #3a3a00; color: #d4c44a; }
-.pm-priority-high { background: #4a2000; color: #e09050; }
-.pm-priority-critical { background: #4a0000; color: #e05252; }
+.pm-priority-low { background: color-mix(in srgb, var(--color-green) 18%, transparent); color: var(--color-green); }
+.pm-priority-medium { background: color-mix(in srgb, var(--color-yellow) 18%, transparent); color: var(--color-yellow); }
+.pm-priority-high { background: color-mix(in srgb, var(--color-orange) 18%, transparent); color: var(--color-orange); }
+.pm-priority-critical { background: color-mix(in srgb, var(--color-red) 18%, transparent); color: var(--color-red); }
 
+/* Small priority dot — used on Kanban task cards */
+.pm-pr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+  background: var(--pm-priority-color, var(--text-faint));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pm-priority-color, var(--text-faint)) 22%, transparent);
+}
+
+.pm-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
 .pm-card-title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-normal);
-  margin-bottom: 5px;
-  line-height: 1.35;
+  line-height: 1.4;
 }
-.pm-card-project {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 3px;
-}
-.pm-card-due {
-  font-size: 12px;
-  margin-bottom: 3px;
-}
-.pm-due-ok { color: var(--text-muted); }
-.pm-overdue { color: #e05252; font-weight: 600; }
-.pm-card-hours {
-  font-size: 12px;
-  color: var(--text-faint);
-}
-.pm-card-timer {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #7ecfa0;
+.pm-card-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.pm-meta-dot::before { content: "\\00b7"; margin: 0 5px; color: var(--text-faint); }
+.pm-overdue { color: var(--color-red); font-weight: 700; }
+.pm-card-hours {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  margin-inline-start: auto;
+}
+.pm-card-timer {
+  margin-top: 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--interactive-accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
 }
 .pm-timer-dot {
-  animation: pm-blink 1s step-start infinite;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  flex-shrink: 0;
+  animation: pm-pulse 1.8s ease-out infinite;
 }
-@keyframes pm-blink {
-  50% { opacity: 0; }
+@keyframes pm-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--interactive-accent) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--interactive-accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--interactive-accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-timer-dot { animation: none; }
+  .pm-task-card { transition: none; }
 }
 
 /* Modal styles */
+.pm-modal h2 {
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
 .pm-modal .setting-item { border-top: 1px solid var(--background-modifier-border); }
-.pm-modal h3 { margin: 18px 0 8px; font-size: 15px; }
-.pm-modal h4 { margin: 12px 0 6px; font-size: 13px; color: var(--text-muted); }
+.pm-modal h3 { margin: 20px 0 8px; font-size: 15px; font-weight: 600; }
+.pm-modal h4 { margin: 14px 0 6px; font-size: 13px; color: var(--text-muted); font-weight: 600; }
 
 .pm-time-stats {
   display: flex;
@@ -459,7 +564,9 @@ export default class ProjectManagerPlugin extends Plugin {
 .pm-modal-btns {
   display: flex;
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
   justify-content: flex-end;
 }
 

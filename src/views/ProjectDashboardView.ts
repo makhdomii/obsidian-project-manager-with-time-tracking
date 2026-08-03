@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, TFile, Menu, Notice } from "obsidian";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
+import { statusColor, isMutedStatus } from "../utils/StatusColors";
 
 export const PROJECT_DASHBOARD_VIEW_TYPE = "project-manager-project-dashboard";
 
@@ -68,6 +69,8 @@ export class ProjectDashboardView extends ItemView {
 
     for (const status of statuses) {
       const col = board.createDiv({ cls: "pm-kanban-col" });
+      col.style.setProperty("--pm-status-color", statusColor(status));
+      col.createDiv({ cls: "pm-col-strip" });
       const header = col.createDiv({ cls: "pm-col-header" });
       header.createSpan({ cls: "pm-col-title", text: status });
 
@@ -84,6 +87,9 @@ export class ProjectDashboardView extends ItemView {
       const cards = col.createDiv({ cls: "pm-col-cards" });
       cards.setAttribute("data-status", status);
 
+      if (colTasks.length === 0) {
+        cards.createDiv({ cls: "pm-col-empty", text: "No projects here" });
+      }
       for (const project of colTasks) {
         this.renderProjectCard(cards, project, tasks);
       }
@@ -127,6 +133,7 @@ export class ProjectDashboardView extends ItemView {
     card.setAttribute("draggable", "true");
     card.setAttribute("data-path", project.path);
     if (overdue) card.addClass("pm-overdue-card");
+    if (isMutedStatus(status)) card.addClass("pm-card-muted");
 
     card.addEventListener("dragstart", (e) => {
       e.dataTransfer?.setData("text/plain", project.path);
@@ -220,7 +227,12 @@ export class ProjectDashboardView extends ItemView {
       await this.render();
     });
 
-    toolbar.createEl("button", { cls: "pm-btn pm-btn-primary", text: "+ New Project" })
+    toolbar.createEl("button", { cls: "pm-btn pm-btn-primary", text: "+ New Task" })
+      .addEventListener("click", () => {
+        this.plugin.openNewTaskModal(this.currentWorkspace);
+      });
+
+    toolbar.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "+ New Project" })
       .addEventListener("click", () => {
         this.plugin.openNewProjectModal(this.currentWorkspace);
       });

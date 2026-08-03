@@ -40,6 +40,14 @@ export class ProjectModal extends Modal {
     contentEl.empty();
     contentEl.addClass("pm-modal");
 
+    // Enter تو هر فیلدی همون کاری رو می‌کنه که کلیک روی Create/Save می‌کنه
+    contentEl.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.isComposing) return;
+      if ((e.target as HTMLElement).tagName === "TEXTAREA") return;
+      e.preventDefault();
+      void this.submitAndClose();
+    });
+
     contentEl.createEl("h2", { text: this.isNew ? "New Project" : `Project: ${this.title}` });
 
     new Setting(contentEl).setName("Title").addText((t) => {
@@ -63,11 +71,7 @@ export class ProjectModal extends Modal {
 
     const btnRow = contentEl.createDiv({ cls: "pm-modal-btns" });
     btnRow.createEl("button", { cls: "pm-btn pm-btn-primary", text: this.isNew ? "Create" : "Save" })
-      .addEventListener("click", async () => {
-        if (!this.title.trim()) { new Notice("Title is required"); return; }
-        await this.save();
-        this.close();
-      });
+      .addEventListener("click", () => void this.submitAndClose());
 
     if (!this.isNew && this.file) {
       const f = this.file;
@@ -80,6 +84,12 @@ export class ProjectModal extends Modal {
 
     btnRow.createEl("button", { cls: "pm-btn", text: "Cancel" })
       .addEventListener("click", () => this.close());
+  }
+
+  private async submitAndClose(): Promise<void> {
+    if (!this.title.trim()) { new Notice("Title is required"); return; }
+    await this.save();
+    this.close();
   }
 
   async save(): Promise<void> {

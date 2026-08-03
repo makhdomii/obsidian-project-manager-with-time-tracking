@@ -5,6 +5,9 @@ import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 
 export class TaskModal extends Modal {
+  // پروژه‌هایی که هنوز باز نشدن یا در حال انجامن — فقط این‌ها موقع ساخت/ویرایش تسک قابل انتخابن
+  private static readonly ACTIVE_PROJECT_STATUSES = ["not started", "in progress"];
+
   plugin: ProjectManagerPlugin;
   file: TFile | null;
   ws: Workspace;
@@ -52,6 +55,13 @@ export class TaskModal extends Modal {
 
       return children
           .filter((f: any) => !Array.isArray(f.children) && f.name?.endsWith(".md"))
+          .filter((f: any) => {
+              const slug = (f.name as string).replace(/\.md$/, "");
+              // پروژه‌ی همین تسک رو همیشه نگه دار، حتی اگه وضعیتش از "not started"/"in progress" خارج شده باشه
+              if (slug === this.projectSlug) return true;
+              const status = this.app.metadataCache.getFileCache(f as TFile)?.frontmatter?.status;
+              return TaskModal.ACTIVE_PROJECT_STATUSES.includes(status);
+          })
           .map((f: any) => (f.name as string).replace(/\.md$/, ""))
           .sort();
   }
@@ -60,6 +70,20 @@ export class TaskModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("pm-modal");
+
+    // Enter همون کاری رو می‌کنه که نزدیک‌ترین دکمه‌ی اصلی انجام می‌ده:
+    // توی فیلدهای «افزودن دستی زمان» → Add Entry، وگرنه → Create/Save
+    contentEl.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.isComposing) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === "TEXTAREA") return;
+      e.preventDefault();
+      if (target.closest(".pm-manual-entry")) {
+        contentEl.querySelector<HTMLButtonElement>(".pm-manual-entry .pm-btn-secondary")?.click();
+        return;
+      }
+      void this.submitAndClose();
+    });
 
     contentEl.createEl("h2", { text: this.isNew ? "New Task" : `Task: ${this.title}` });
 
@@ -187,11 +211,7 @@ export class TaskModal extends Modal {
     const btnRow = contentEl.createDiv({ cls: "pm-modal-btns" });
 
     btnRow.createEl("button", { cls: "pm-btn pm-btn-primary", text: this.isNew ? "Create" : "Save" })
-      .addEventListener("click", async () => {
-        if (!this.title.trim()) { new Notice("Title is required"); return; }
-        await this.save();
-        this.close();
-      });
+      .addEventListener("click", () => void this.submitAndClose());
 
     if (!this.isNew && this.file) {
       const f = this.file;
@@ -204,6 +224,12 @@ export class TaskModal extends Modal {
 
     btnRow.createEl("button", { cls: "pm-btn", text: "Cancel" })
       .addEventListener("click", () => this.close());
+  }
+
+  private async submitAndClose(): Promise<void> {
+    if (!this.title.trim()) { new Notice("Title is required"); return; }
+    await this.save();
+    this.close();
   }
 
   async save(): Promise<void> {

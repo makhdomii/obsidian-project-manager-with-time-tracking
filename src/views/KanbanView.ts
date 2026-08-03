@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, TFile, Menu, Notice } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
+import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
 
 export const KANBAN_VIEW_TYPE = "project-manager-kanban";
 
@@ -66,6 +67,7 @@ export class KanbanView extends ItemView {
 
     for (const status of statuses) {
       const col = board.createDiv({ cls: "pm-kanban-col" });
+      col.style.setProperty("--pm-status-color", statusColor(status));
       const colFiltered = tasks.filter((f) => {
         const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
         if (!fm) return false;
@@ -75,6 +77,7 @@ export class KanbanView extends ItemView {
         return true;
       });
 
+      col.createDiv({ cls: "pm-col-strip" });
       const header = col.createDiv({ cls: "pm-col-header" });
       header.createSpan({ cls: "pm-col-title", text: status });
       header.createSpan({ cls: "pm-col-count", text: String(colFiltered.length) });
@@ -82,6 +85,9 @@ export class KanbanView extends ItemView {
       const cards = col.createDiv({ cls: "pm-col-cards" });
       cards.setAttribute("data-status", status);
 
+      if (colFiltered.length === 0) {
+        cards.createDiv({ cls: "pm-col-empty", text: "No tasks here" });
+      }
       for (const task of colFiltered) {
         this.renderTaskCard(cards, task, status);
       }
@@ -108,42 +114,43 @@ export class KanbanView extends ItemView {
     card.setAttribute("draggable", "true");
     card.setAttribute("data-path", file.path);
 
+    const activePath = this.plugin.timeTracker.getActiveTaskPath();
+    if (this.plugin.timeTracker.isRunning()) {
+      card.addClass(activePath === file.path ? "pm-task-active" : "pm-task-inactive");
+    }
+    if (isMutedStatus(status) && activePath !== file.path) {
+      card.addClass("pm-card-muted");
+    }
+
     card.addEventListener("dragstart", (e) => {
       e.dataTransfer?.setData("text/plain", file.path);
       card.addClass("pm-dragging");
     });
     card.addEventListener("dragend", () => card.removeClass("pm-dragging"));
 
-    // Priority badge
-    const priorityClass = `pm-priority-${(fm.priority ?? "medium").toLowerCase()}`;
-    card.createDiv({ cls: `pm-priority-badge ${priorityClass}`, text: fm.priority ?? "medium" });
+    // Title + priority dot
+    const head = card.createDiv({ cls: "pm-card-head" });
+    head.createDiv({ cls: "pm-card-title", text: fm.title ?? file.basename });
+    const prDot = head.createDiv({ cls: "pm-pr-dot" });
+    prDot.style.setProperty("--pm-priority-color", priorityColor(fm.priority ?? "medium"));
+    prDot.setAttribute("aria-label", `Priority: ${fm.priority ?? "medium"}`);
 
-    // Title
-    card.createDiv({ cls: "pm-card-title", text: fm.title ?? file.basename });
-
-    // Project link
+    // Meta row — project · due · hours, all on one line
+    const meta = card.createDiv({ cls: "pm-card-meta" });
     if (fm.project) {
-      const projDiv = card.createDiv({ cls: "pm-card-project" });
-      projDiv.createSpan({ text: "📁 " });
-      projDiv.createSpan({ text: fm.project.replace(/^\[\[|\]\]$/g, "") });
+      meta.createSpan({ text: `📁 ${fm.project.replace(/^\[\[|\]\]$/g, "")}` });
     }
-
-    // Due date
     if (fm.due) {
-      const dueDiv = card.createDiv({ cls: "pm-card-due" });
       const isOverdue = fm.due < new Date().toISOString().slice(0, 10) && status !== "done";
-      dueDiv.addClass(isOverdue ? "pm-overdue" : "pm-due-ok");
-      dueDiv.createSpan({ text: `📅 ${fm.due}` });
+      if (fm.project) meta.createSpan({ cls: "pm-meta-dot" });
+      meta.createSpan({ cls: isOverdue ? "pm-overdue" : "", text: `📅 ${fm.due}` });
     }
-
-    // Hours
-    card.createDiv({ cls: "pm-card-hours", text: `⏱ ${fm.total_hours ?? 0}h` });
+    meta.createSpan({ cls: "pm-card-hours", text: `⏱ ${fm.total_hours ?? 0}h` });
 
     // Timer indicator
-    const activePath = this.plugin.timeTracker.getActiveTaskPath();
     if (activePath === file.path) {
       const timerDiv = card.createDiv({ cls: "pm-card-timer" });
-      timerDiv.createSpan({ cls: "pm-timer-dot", text: "● " });
+      timerDiv.createSpan({ cls: "pm-timer-dot" });
       timerDiv.createSpan({ cls: "pm-timer-elapsed", text: this.plugin.timeTracker.getElapsed() });
     }
 
