@@ -2,16 +2,66 @@ import { ItemView, WorkspaceLeaf, TFile, Menu, Notice } from "obsidian";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
-import { statusColor, isMutedStatus } from "../utils/StatusColors";
+import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
+import {
+  AnalyticsData, TimeRecord, TaskInfo, ProjectInfo,
+  currentStreak, groupHoursBy, hoursPerDay, isClosedStatus, isDoneStatus,
+  longestStreak, recordsInRange, sumHours,
+} from "../managers/AnalyticsManager";
+import {
+  BarRow, CalendarMode, ChartTooltip, ColumnPoint, StackSegment,
+  barListChart, chartCard, columnChart, formatHours, formatNumber, heatLegend,
+  heroFigure, jalaliDayTitle, renderCalendar, stackedBar, statTile,
+} from "./DashboardCharts";
+import {
+  addDays, daysBetween, isoToJalali, jalaliLabel, jalaliMonthLabel, jalaliMonthLength,
+  jalaliToISO, rangeDays, seasonName, startOfJalaliMonth, startOfJalaliSeason,
+  startOfJalaliWeek, startOfJalaliYear, todayISO, toPersianDigits,
+} from "../utils/Jalali";
 
 export const PROJECT_DASHBOARD_VIEW_TYPE = "project-manager-project-dashboard";
+
+type TabId = "overview" | "calendar" | "projects";
+type RangeId = "week" | "month" | "season" | "year" | "all";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "calendar", label: "Calendar" },
+  { id: "projects", label: "Projects" },
+];
+
+const RANGES: { id: RangeId; label: string }[] = [
+  { id: "week", label: "This week" },
+  { id: "month", label: "This month" },
+  { id: "season", label: "This season" },
+  { id: "year", label: "This year" },
+  { id: "all", label: "All time" },
+];
+
+interface RangeBounds {
+  from: string;
+  to: string;
+  /** انتهای مؤثر برای آمار — از امروز جلوتر نمی‌ره */
+  effTo: string;
+  prevFrom: string;
+  prevTo: string;
+  label: string;
+  calMode: CalendarMode;
+}
 
 export class ProjectDashboardView extends ItemView {
   plugin: ProjectManagerPlugin;
   currentWorkspace: Workspace;
-  filterStatus: string = "";
-  filterPriority: string = "";
+  filterStatus = "";
+  filterPriority = "";
+
+  private tab: TabId = "overview";
+  private range: RangeId = "month";
+  private selectedDay: string | null = null;
+  private tooltip: ChartTooltip | null = null;
   private refreshInterval: number | null = null;
+  private renderTimer: number | null = null;
+  private scrollTop = 0;
 
   constructor(leaf: WorkspaceLeaf, plugin: ProjectManagerPlugin) {
     super(leaf);
@@ -19,20 +69,13 @@ export class ProjectDashboardView extends ItemView {
     this.currentWorkspace = plugin.getCurrentWorkspace();
   }
 
-  getViewType(): string {
-    return PROJECT_DASHBOARD_VIEW_TYPE;
-  }
-
-  getDisplayText(): string {
-    return "Project Dashboard";
-  }
-
-  getIcon(): string {
-    return "folder-open";
-  }
+  getViewType(): string { return PROJECT_DASHBOARD_VIEW_TYPE; }
+  getDisplayText(): string { return "Project Dashboard"; }
+  getIcon(): string { return "layout-dashboard"; }
 
   async onOpen(): Promise<void> {
     await this.render();
+
     this.refreshInterval = window.setInterval(() => {
       if (this.plugin.timeTracker.isRunning()) {
         const timerEl = this.containerEl.querySelector(".pm-timer-elapsed");
@@ -40,156 +83,56 @@ export class ProjectDashboardView extends ItemView {
       }
     }, 1000);
 
-    this.registerEvent(this.app.vault.on("create", () => this.render()));
-    this.registerEvent(this.app.vault.on("modify", () => this.render()));
-    this.registerEvent(this.app.vault.on("delete", () => this.render()));
-    this.registerEvent(this.app.metadataCache.on("resolved", () => this.render()));
+    // رندر دوباره روی هر تغییرِ والت — ولی دیبونس‌شده، چون یک عملیات ذخیره
+    // چند رویداد پشت‌سرهم می‌سازه و رندرِ کاملِ داشبورد ارزون نیست.
+    this.registerEvent(this.app.vault.on("create", () => this.scheduleRender()));
+    this.registerEvent(this.app.vault.on("modify", () => this.scheduleRender()));
+    this.registerEvent(this.app.vault.on("delete", () => this.scheduleRender()));
+    this.registerEvent(this.app.metadataCache.on("resolved", () => this.scheduleRender()));
   }
 
   async onClose(): Promise<void> {
-    if (this.refreshInterval !== null) {
-      clearInterval(this.refreshInterval);
-    }
+    if (this.refreshInterval !== null) clearInterval(this.refreshInterval);
+    if (this.renderTimer !== null) window.clearTimeout(this.renderTimer);
   }
+
+  private scheduleRender(): void {
+    if (this.renderTimer !== null) window.clearTimeout(this.renderTimer);
+    this.renderTimer = window.setTimeout(() => {
+      this.renderTimer = null;
+      void this.render();
+    }, 250);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  رندر
+  // ══════════════════════════════════════════════════════════════════════
 
   async render(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement;
+    const prevScroll = container.querySelector<HTMLElement>(".pm-db-scroll");
+    if (prevScroll) this.scrollTop = prevScroll.scrollTop;
+
     container.empty();
     container.addClass("pm-dashboard-container");
+    this.tooltip = new ChartTooltip(container);
 
     this.renderToolbar(container);
+    this.renderTabs(container);
 
-    const content = container.createDiv({ cls: "pm-dashboard-content" });
-    const projects = await this.plugin.projectManager.getProjects(this.currentWorkspace);
-    const tasks = await this.plugin.taskManager.getTasks(this.currentWorkspace);
+    const scroll = container.createDiv({ cls: "pm-db-scroll" });
+    const data = await this.plugin.analytics.collect(this.currentWorkspace);
 
-    // Group projects by status into a kanban-style board
-    const statuses = this.plugin.settings.statuses;
-    const board = content.createDiv({ cls: "pm-kanban-board" });
+    if (this.tab === "overview") this.renderOverview(scroll, data);
+    else if (this.tab === "calendar") this.renderCalendarTab(scroll, data);
+    else this.renderProjectsTab(scroll, data);
 
-    for (const status of statuses) {
-      const col = board.createDiv({ cls: "pm-kanban-col" });
-      col.style.setProperty("--pm-status-color", statusColor(status));
-      col.createDiv({ cls: "pm-col-strip" });
-      const header = col.createDiv({ cls: "pm-col-header" });
-      header.createSpan({ cls: "pm-col-title", text: status });
-
-      const colTasks = projects
-        .filter((project) => {
-          const fm = this.app.metadataCache.getFileCache(project)?.frontmatter ?? {};
-          if (this.filterPriority && fm.priority !== this.filterPriority) return false;
-          if (this.filterStatus && fm.status !== this.filterStatus) return false;
-          return fm.status === status;
-        });
-
-      header.createSpan({ cls: "pm-col-count", text: String(colTasks.length) });
-
-      const cards = col.createDiv({ cls: "pm-col-cards" });
-      cards.setAttribute("data-status", status);
-
-      if (colTasks.length === 0) {
-        cards.createDiv({ cls: "pm-col-empty", text: "No projects here" });
-      }
-      for (const project of colTasks) {
-        this.renderProjectCard(cards, project, tasks);
-      }
-
-      // Drop zone handlers
-      cards.addEventListener("dragover", (e) => { e.preventDefault(); cards.addClass("pm-drag-over"); });
-      cards.addEventListener("dragleave", () => cards.removeClass("pm-drag-over"));
-      cards.addEventListener("drop", async (e) => {
-        e.preventDefault();
-        cards.removeClass("pm-drag-over");
-        const projPath = e.dataTransfer?.getData("text/plain");
-        if (!projPath) return;
-        const file = this.app.vault.getAbstractFileByPath(projPath) as TFile | null;
-        if (!file) return;
-        await updateFrontmatterFields(this.app, file, { status });
-        // Refresh both views
-        this.plugin.refreshProjectDashboard();
-        this.plugin.refreshKanban();
-      });
-    }
+    scroll.scrollTop = this.scrollTop;
   }
 
-  renderProjectCard(container: HTMLElement, project: TFile, tasks: TFile[]): void {
-    const fm = this.app.metadataCache.getFileCache(project)?.frontmatter ?? {};
-    const projectSlug = project.basename;
-    const projectTasks = tasks.filter((task) => {
-      const tfm = this.app.metadataCache.getFileCache(task)?.frontmatter;
-      return tfm?.project === `[[${projectSlug}]]`;
-    });
+  // ── نوار ابزار و تب‌ها ────────────────────────────────────────────────
 
-    const totalHours = projectTasks.reduce((sum, task) => {
-      const tfm = this.app.metadataCache.getFileCache(task)?.frontmatter;
-      return sum + Number(tfm?.total_hours ?? 0);
-    }, 0);
-
-    const status = fm.status ?? "not started";
-    const overdue = fm.due && fm.due < new Date().toISOString().slice(0, 10) && status !== "done";
-
-    const card = container.createDiv({ cls: "pm-task-card" });
-    // make draggable like task cards
-    card.setAttribute("draggable", "true");
-    card.setAttribute("data-path", project.path);
-    if (overdue) card.addClass("pm-overdue-card");
-    if (isMutedStatus(status)) card.addClass("pm-card-muted");
-
-    card.addEventListener("dragstart", (e) => {
-      e.dataTransfer?.setData("text/plain", project.path);
-      card.addClass("pm-dragging");
-    });
-    card.addEventListener("dragend", () => card.removeClass("pm-dragging"));
-
-    // Priority badge (reuse task styles)
-    const priorityClass = `pm-priority-${(fm.priority ?? "medium").toLowerCase()}`;
-    card.createDiv({ cls: `pm-priority-badge ${priorityClass}`, text: fm.priority ?? "medium" });
-
-    const header = card.createDiv({ cls: "pm-project-card-header" });
-    header.createDiv({ cls: "pm-project-title", text: fm.title ?? project.basename });
-    header.createDiv({ cls: "pm-project-chip", text: status });
-
-    const meta = card.createDiv({ cls: "pm-project-meta" });
-    meta.createDiv({ cls: "pm-project-stat", text: `Priority: ${fm.priority ?? "medium"}` });
-    meta.createDiv({ cls: "pm-project-stat", text: `Due: ${fm.due ?? "—"}` });
-    meta.createDiv({ cls: "pm-project-stat", text: `Tasks: ${projectTasks.length}` });
-    meta.createDiv({ cls: "pm-project-stat", text: `Hours: ${Math.round(totalHours * 100) / 100}` });
-
-    const actions = card.createDiv({ cls: "pm-project-actions" });
-    actions.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Edit" })
-      .addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.plugin.openProjectModal(project, this.currentWorkspace);
-      });
-
-    actions.createEl("button", { cls: "pm-btn", text: "Open note" })
-      .addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.app.workspace.getLeaf(false).openFile(project);
-      });
-
-    card.addEventListener("click", () => {
-      this.plugin.openProjectModal(project, this.currentWorkspace);
-    });
-
-    card.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      const menu = new Menu();
-      menu.addItem((item) =>
-        item.setTitle("Open project note").setIcon("file-text").onClick(() => {
-          this.app.workspace.getLeaf(false).openFile(project);
-        })
-      );
-      menu.addItem((item) =>
-        item.setTitle("Edit project").setIcon("pencil").onClick(() => {
-          this.plugin.openProjectModal(project, this.currentWorkspace);
-        })
-      );
-      menu.showAtMouseEvent(e);
-    });
-  }
-
-  renderToolbar(container: HTMLElement): void {
+  private renderToolbar(container: HTMLElement): void {
     const toolbar = container.createDiv({ cls: "pm-toolbar" });
 
     const wsSelect = toolbar.createEl("select", { cls: "pm-ws-select" });
@@ -199,50 +142,58 @@ export class ProjectDashboardView extends ItemView {
     });
     wsSelect.addEventListener("change", async () => {
       const ws = this.plugin.settings.workspaces.find((w) => w.id === wsSelect.value);
-      if (ws) {
-        this.currentWorkspace = ws;
-        this.plugin.settings.defaultWorkspaceId = ws.id;
-        await this.plugin.saveSettings();
+      if (!ws) return;
+      this.currentWorkspace = ws;
+      this.plugin.settings.defaultWorkspaceId = ws.id;
+      this.selectedDay = null;
+      this.scrollTop = 0;
+      await this.plugin.saveSettings();
+      await this.render();
+    });
+
+    const rangeSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
+    RANGES.forEach((r) => {
+      const opt = rangeSelect.createEl("option", { value: r.id, text: r.label });
+      if (r.id === this.range) opt.selected = true;
+    });
+    rangeSelect.addEventListener("change", async () => {
+      this.range = rangeSelect.value as RangeId;
+      await this.render();
+    });
+
+    // فیلترهای وضعیت/اولویت فقط تب پروژه‌ها رو محدود می‌کنن — پس فقط همون‌جا نشون داده می‌شن
+    if (this.tab === "projects") {
+      const statusSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
+      statusSelect.createEl("option", { value: "", text: "All statuses" });
+      this.plugin.settings.statuses.forEach((status) => {
+        const opt = statusSelect.createEl("option", { value: status, text: status });
+        if (status === this.filterStatus) opt.selected = true;
+      });
+      statusSelect.addEventListener("change", async () => {
+        this.filterStatus = statusSelect.value;
         await this.render();
-      }
-    });
+      });
 
-    const statusSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
-    statusSelect.createEl("option", { value: "", text: "All statuses" });
-    this.plugin.settings.statuses.forEach((status) => {
-      const opt = statusSelect.createEl("option", { value: status, text: status });
-      if (status === this.filterStatus) opt.selected = true;
-    });
-    statusSelect.addEventListener("change", async () => {
-      this.filterStatus = statusSelect.value;
-      await this.render();
-    });
-
-    const prioSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
-    prioSelect.createEl("option", { value: "", text: "All priorities" });
-    this.plugin.settings.priorities.forEach((p) => {
-      const opt = prioSelect.createEl("option", { value: p, text: p });
-      if (p === this.filterPriority) opt.selected = true;
-    });
-    prioSelect.addEventListener("change", async () => {
-      this.filterPriority = prioSelect.value;
-      await this.render();
-    });
+      const prioSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
+      prioSelect.createEl("option", { value: "", text: "All priorities" });
+      this.plugin.settings.priorities.forEach((p) => {
+        const opt = prioSelect.createEl("option", { value: p, text: p });
+        if (p === this.filterPriority) opt.selected = true;
+      });
+      prioSelect.addEventListener("change", async () => {
+        this.filterPriority = prioSelect.value;
+        await this.render();
+      });
+    }
 
     toolbar.createEl("button", { cls: "pm-btn pm-btn-primary", text: "+ New Task" })
-      .addEventListener("click", () => {
-        this.plugin.openNewTaskModal(this.currentWorkspace);
-      });
+      .addEventListener("click", () => this.plugin.openNewTaskModal(this.currentWorkspace));
 
     toolbar.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "+ New Project" })
-      .addEventListener("click", () => {
-        this.plugin.openNewProjectModal(this.currentWorkspace);
-      });
+      .addEventListener("click", () => this.plugin.openNewProjectModal(this.currentWorkspace));
 
-    toolbar.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Open Kanban" })
-      .addEventListener("click", () => {
-        this.plugin.openKanban();
-      });
+    toolbar.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Kanban" })
+      .addEventListener("click", () => this.plugin.openKanban());
 
     if (this.plugin.timeTracker.isRunning()) {
       const timerBar = toolbar.createDiv({ cls: "pm-timer-bar" });
@@ -259,5 +210,664 @@ export class ProjectDashboardView extends ItemView {
           }
         });
     }
+  }
+
+  private renderTabs(container: HTMLElement): void {
+    const tabs = container.createDiv({ cls: "pm-db-tabs" });
+    for (const t of TABS) {
+      const btn = tabs.createEl("button", {
+        cls: `pm-db-tab${t.id === this.tab ? " is-active" : ""}`,
+        text: t.label,
+      });
+      btn.setAttribute("aria-pressed", String(t.id === this.tab));
+      btn.addEventListener("click", async () => {
+        if (this.tab === t.id) return;
+        this.tab = t.id;
+        this.scrollTop = 0;
+        await this.render();
+      });
+    }
+  }
+
+  // ── محاسبه‌ی بازه ─────────────────────────────────────────────────────
+
+  private bounds(data: AnalyticsData): RangeBounds {
+    const today = todayISO();
+    const { jy, jm } = isoToJalali(today);
+    let from: string;
+    let to: string;
+    let label: string;
+    let calMode: CalendarMode;
+
+    switch (this.range) {
+      case "week": {
+        from = startOfJalaliWeek(today);
+        to = addDays(from, 6);
+        label = `هفته‌ی ${jalaliLabel(from)}`;
+        calMode = "dots";
+        break;
+      }
+      case "season": {
+        from = startOfJalaliSeason(today);
+        const lastMonth = Math.floor((jm - 1) / 3) * 3 + 3;
+        to = jalaliToISO(jy, lastMonth, jalaliMonthLength(jy, lastMonth));
+        label = `${seasonName(jm)} ${toPersianDigits(jy)}`;
+        calMode = "grid";
+        break;
+      }
+      case "year": {
+        from = startOfJalaliYear(today);
+        to = jalaliToISO(jy, 12, jalaliMonthLength(jy, 12));
+        label = `سال ${toPersianDigits(jy)}`;
+        calMode = "heatmap";
+        break;
+      }
+      case "all": {
+        from = data.firstISO ?? startOfJalaliYear(today);
+        to = data.lastISO && data.lastISO > today ? data.lastISO : today;
+        label = "All time";
+        calMode = "heatmap";
+        break;
+      }
+      default: {
+        from = startOfJalaliMonth(today);
+        to = jalaliToISO(jy, jm, jalaliMonthLength(jy, jm));
+        label = jalaliMonthLabel(jy, jm);
+        calMode = "grid";
+      }
+    }
+
+    const effTo = to > today ? today : to;
+    // دوره‌ی قبل دقیقاً به اندازه‌ی روزهای سپری‌شده‌ی همین دوره‌ست، نه کل دوره —
+    // وگرنه ماهِ نیمه‌تمام همیشه از ماهِ کاملِ قبلی کمتر در میاد.
+    const elapsed = Math.max(1, daysBetween(from, effTo) + 1);
+    const prevTo = addDays(from, -1);
+    const prevFrom = addDays(prevTo, -(elapsed - 1));
+
+    return { from, to, effTo, prevFrom, prevTo, label, calMode };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  تب مرور کلی
+  // ══════════════════════════════════════════════════════════════════════
+
+  private renderOverview(root: HTMLElement, data: AnalyticsData): void {
+    const b = this.bounds(data);
+    const inRange = recordsInRange(data.records, b.from, b.effTo);
+    const prev = recordsInRange(data.records, b.prevFrom, b.prevTo);
+    const days = rangeDays(b.from, b.effTo);
+    const perDay = hoursPerDay(inRange, days);
+
+    const total = sumHours(inRange);
+    const prevTotal = sumHours(prev);
+    const activeDays = days.filter((d) => (perDay.get(d) ?? 0) > 0).length;
+    const openTasks = data.tasks.filter((t) => !isClosedStatus(t.status));
+    const today = todayISO();
+    const overdue = openTasks.filter((t) => t.due && t.due < today);
+
+    // ── خط اول: یک عدد قهرمان + کاشی‌ها ──
+    const headline = root.createDiv({ cls: "pm-db-headline" });
+    const diff = Math.round((total - prevTotal) * 100) / 100;
+    heroFigure(headline, {
+      label: `Time tracked · ${b.label}`,
+      value: formatNumber(total),
+      unit: "hours",
+      sub: `${b.from} → ${b.effTo}  ·  ${jalaliLabel(b.from)} تا ${jalaliLabel(b.effTo)}`,
+      delta: prevTotal > 0 || total > 0
+        ? {
+            text: `${formatHours(Math.abs(diff))} vs previous ${days.length}d`,
+            direction: diff > 0.01 ? "up" : diff < -0.01 ? "down" : "flat",
+          }
+        : undefined,
+    });
+
+    const tiles = headline.createDiv({ cls: "pm-db-tiles" });
+    statTile(tiles, {
+      label: "Active days",
+      value: String(activeDays),
+      unit: `/ ${days.length}`,
+      sub: `${Math.round((activeDays / Math.max(1, days.length)) * 100)}% of the period`,
+    });
+    statTile(tiles, {
+      label: "Avg / active day",
+      value: formatNumber(activeDays ? Math.round((total / activeDays) * 10) / 10 : 0),
+      unit: "h",
+      sub: activeDays ? `over ${activeDays} day${activeDays === 1 ? "" : "s"}` : "nothing logged yet",
+    });
+    const streak = currentStreak(data.byDay);
+    statTile(tiles, {
+      label: "Current streak",
+      value: String(streak),
+      unit: streak === 1 ? "day" : "days",
+      sub: `longest ${longestStreak(data.byDay)} days`,
+    });
+    statTile(tiles, {
+      label: "Open tasks",
+      value: String(openTasks.length),
+      sub: `${data.tasks.filter((t) => isDoneStatus(t.status)).length} done of ${data.tasks.length}`,
+    });
+    statTile(tiles, {
+      label: "Overdue",
+      value: String(overdue.length),
+      tone: overdue.length ? "critical" : "default",
+      sub: overdue.length ? "past their due date" : "nothing past due",
+    });
+
+    // ── کارت‌ها ──
+    const cards = root.createDiv({ cls: "pm-db-cards" });
+    this.renderHoursChart(cards, b, inRange, days, perDay);
+    this.renderProjectHoursChart(cards, data, inRange);
+    this.renderTaskHoursChart(cards, data, inRange, b);
+    this.renderStatusChart(cards, data);
+    this.renderPriorityChart(cards, openTasks);
+    this.renderAttentionCard(cards, openTasks, today);
+    this.renderRecentCard(cards, data, inRange);
+  }
+
+  private renderHoursChart(
+    parent: HTMLElement, b: RangeBounds, inRange: TimeRecord[],
+    days: string[], perDay: Map<string, number>
+  ): void {
+    // بیش از ۴۵ ستون یعنی ستون‌های موکششی و برچسب‌های روی‌هم — از اون‌جا به بعد هفتگی
+    const weekly = days.length > 45;
+    const points: ColumnPoint[] = [];
+
+    if (weekly) {
+      const buckets = new Map<string, { start: string; end: string; hours: number }>();
+      for (const iso of days) {
+        const start = startOfJalaliWeek(iso);
+        const bucket = buckets.get(start) ?? { start, end: iso, hours: 0 };
+        bucket.end = iso;
+        bucket.hours += perDay.get(iso) ?? 0;
+        buckets.set(start, bucket);
+      }
+      for (const bucket of buckets.values()) {
+        const { jd, jm } = isoToJalali(bucket.start);
+        points.push({
+          key: bucket.start,
+          axisLabel: toPersianDigits(jd),
+          value: Math.round(bucket.hours * 100) / 100,
+          tipLines: [
+            `هفته‌ی ${jalaliLabel(bucket.start)}`,
+            `${formatHours(bucket.hours)} tracked`,
+            `${bucket.start} → ${bucket.end}`,
+          ],
+        });
+      }
+    } else {
+      for (const iso of days) {
+        const hours = perDay.get(iso) ?? 0;
+        points.push({
+          key: iso,
+          axisLabel: toPersianDigits(isoToJalali(iso).jd),
+          value: hours,
+          tipLines: [jalaliDayTitle(iso), `${formatHours(hours)} tracked`, iso],
+        });
+      }
+    }
+
+    const card = chartCard(
+      parent,
+      weekly ? "Hours per week" : "Hours per day",
+      `${b.label} · ${weekly ? "grouped by Jalali week" : "one column per day"}`
+    );
+    card.root.addClass("pm-db-wide");
+
+    if (!inRange.length) {
+      card.body.createDiv({ cls: "pm-db-empty", text: "No time logged in this period yet." });
+      return;
+    }
+
+    columnChart(card.body, points, this.tooltip!, (p) => {
+      this.selectedDay = p.key;
+      this.tab = "calendar";
+      this.scrollTop = 0;
+      void this.render();
+    });
+
+    card.setTable(
+      ["Date (Jalali)", "Date", "Hours"],
+      points.map((p) => [
+        weekly ? `هفته‌ی ${jalaliLabel(p.key)}` : jalaliLabel(p.key),
+        p.key,
+        formatHours(p.value),
+      ])
+    );
+  }
+
+  private renderProjectHoursChart(parent: HTMLElement, data: AnalyticsData, inRange: TimeRecord[]): void {
+    const grouped = groupHoursBy(
+      inRange,
+      (r) => r.projectSlug || "—",
+      (slug) => data.projectsBySlug.get(slug)?.title ?? (slug === "—" ? "No project" : slug)
+    ).filter((g) => g.hours > 0);
+
+    const card = chartCard(parent, "Time by project", "Where the period went");
+    if (!grouped.length) {
+      card.body.createDiv({ cls: "pm-db-empty", text: "No project time in this period." });
+      return;
+    }
+
+    // بیش از ۸ ردیف خونده نمی‌شه — دنباله توی «Other» جمع می‌شه (نه رنگ جدید)
+    const top = grouped.slice(0, 8);
+    const rest = grouped.slice(8);
+    const rows: BarRow[] = top.map((g) => ({
+      label: g.label,
+      value: g.hours,
+      valueText: formatHours(g.hours),
+      tipLines: [g.label, `${formatHours(g.hours)} in this period`],
+      onClick: () => {
+        const project = data.projectsBySlug.get(g.slug);
+        if (project) this.plugin.openProjectModal(project.file, this.currentWorkspace);
+      },
+    }));
+    if (rest.length) {
+      const otherHours = Math.round(rest.reduce((s, g) => s + g.hours, 0) * 100) / 100;
+      rows.push({
+        label: `Other (${rest.length})`,
+        value: otherHours,
+        valueText: formatHours(otherHours),
+        tipLines: [`${rest.length} more projects`, `${formatHours(otherHours)} combined`],
+      });
+    }
+
+    barListChart(card.body, rows, this.tooltip!);
+    card.setTable(["Project", "Hours"], grouped.map((g) => [g.label, formatHours(g.hours)]));
+  }
+
+  private renderTaskHoursChart(
+    parent: HTMLElement, data: AnalyticsData, inRange: TimeRecord[], b: RangeBounds
+  ): void {
+    const grouped = groupHoursBy(
+      inRange,
+      (r) => r.taskSlug,
+      (slug) => data.tasksBySlug.get(slug)?.title ?? slug
+    ).filter((g) => g.hours > 0);
+
+    const card = chartCard(parent, "Most worked tasks", `Top of ${b.label}`);
+    if (!grouped.length) {
+      card.body.createDiv({ cls: "pm-db-empty", text: "No task time in this period." });
+      return;
+    }
+
+    const rows: BarRow[] = grouped.slice(0, 8).map((g) => {
+      const task = data.tasksBySlug.get(g.slug);
+      return {
+        label: g.label,
+        value: g.hours,
+        valueText: formatHours(g.hours),
+        tipLines: [
+          g.label,
+          `${formatHours(g.hours)} in this period`,
+          task ? `${task.status} · ${task.priority}` : "task note not found",
+        ],
+        onClick: () => { if (task) this.plugin.openTaskModal(task.file, this.currentWorkspace); },
+      };
+    });
+
+    barListChart(card.body, rows, this.tooltip!);
+    card.setTable(["Task", "Hours"], grouped.map((g) => [g.label, formatHours(g.hours)]));
+  }
+
+  /** وضعیت‌های تنظیمات + هر وضعیتِ ناشناخته‌ای که واقعاً توی فایل‌ها هست —
+   *  وگرنه یک تسک با وضعیت دستی از چارت غیب می‌شد ولی توی شمارشِ کل می‌موند. */
+  private allStatuses(found: string[]): string[] {
+    const known = this.plugin.settings.statuses;
+    const extra = Array.from(new Set(found)).filter((s) => s && !known.includes(s)).sort();
+    return [...known, ...extra];
+  }
+
+  private renderStatusChart(parent: HTMLElement, data: AnalyticsData): void {
+    const card = chartCard(parent, "Task status", `${data.tasks.length} tasks in this workspace`);
+    const segments: StackSegment[] = this.allStatuses(data.tasks.map((t) => t.status)).map((status) => {
+      const count = data.tasks.filter((t) => t.status === status).length;
+      return {
+        label: status,
+        value: count,
+        color: statusColor(status),
+        tipLines: [status, `${count} task${count === 1 ? "" : "s"}`],
+      };
+    });
+
+    stackedBar(card.body, segments, this.tooltip!);
+    card.setTable(["Status", "Tasks"], segments.map((s) => [s.label, s.value]));
+  }
+
+  private renderPriorityChart(parent: HTMLElement, openTasks: TaskInfo[]): void {
+    const card = chartCard(parent, "Priority mix", `${openTasks.length} open tasks`);
+    const known = this.plugin.settings.priorities;
+    const extra = Array.from(new Set(openTasks.map((t) => t.priority)))
+      .filter((p) => p && !known.includes(p)).sort();
+    const segments: StackSegment[] = [...known, ...extra].map((priority) => {
+      const count = openTasks.filter((t) => t.priority === priority).length;
+      return {
+        label: priority,
+        value: count,
+        color: priorityColor(priority),
+        tipLines: [priority, `${count} open task${count === 1 ? "" : "s"}`],
+      };
+    });
+
+    stackedBar(card.body, segments, this.tooltip!);
+    card.setTable(["Priority", "Open tasks"], segments.map((s) => [s.label, s.value]));
+  }
+
+  private renderAttentionCard(parent: HTMLElement, openTasks: TaskInfo[], today: string): void {
+    const soon = addDays(today, 7);
+    const dated = openTasks
+      .filter((t) => t.due)
+      .filter((t) => t.due <= soon)
+      .sort((a, b) => (a.due < b.due ? -1 : 1));
+
+    const card = chartCard(parent, "Needs attention", "Overdue and due within 7 days");
+    if (!dated.length) {
+      card.body.createDiv({ cls: "pm-db-empty", text: "Nothing due in the next 7 days." });
+      return;
+    }
+
+    const list = card.body.createDiv({ cls: "pm-db-list" });
+    for (const task of dated.slice(0, 10)) {
+      const overdue = task.due < today;
+      const days = daysBetween(today, task.due);
+      this.renderListItem(list, {
+        color: priorityColor(task.priority),
+        title: task.title,
+        meta: `${task.projectSlug || "no project"} · ${task.status} · ${task.priority}`,
+        value: overdue ? `${Math.abs(days)}d late` : days === 0 ? "today" : `in ${days}d`,
+        overdue,
+        onClick: () => this.plugin.openTaskModal(task.file, this.currentWorkspace),
+      });
+    }
+
+    card.setTable(
+      ["Task", "Due", "Due (Jalali)", "Priority", "Status"],
+      dated.map((t) => [t.title, t.due, jalaliLabel(t.due), t.priority, t.status])
+    );
+  }
+
+  private renderRecentCard(parent: HTMLElement, data: AnalyticsData, inRange: TimeRecord[]): void {
+    const card = chartCard(parent, "Recently tracked", "Latest time entries in this period");
+    const recent = [...inRange].reverse().slice(0, 10);
+
+    if (!recent.length) {
+      card.body.createDiv({ cls: "pm-db-empty", text: "No entries in this period." });
+      return;
+    }
+
+    const list = card.body.createDiv({ cls: "pm-db-list" });
+    for (const rec of recent) {
+      const task = data.tasksBySlug.get(rec.taskSlug);
+      this.renderListItem(list, {
+        color: task ? statusColor(task.status) : "var(--text-faint)",
+        title: rec.taskTitle,
+        meta: `${jalaliLabel(rec.iso)} · ${rec.projectSlug || "no project"}`,
+        value: formatHours(rec.hours),
+        onClick: () => {
+          if (task) this.plugin.openTaskModal(task.file, this.currentWorkspace);
+        },
+      });
+    }
+
+    card.setTable(
+      ["Date", "Date (Jalali)", "Task", "Hours"],
+      [...inRange].reverse().map((r) => [r.iso, jalaliLabel(r.iso), r.taskTitle, formatHours(r.hours)])
+    );
+  }
+
+  private renderListItem(
+    list: HTMLElement,
+    opts: { color: string; title: string; meta: string; value: string; overdue?: boolean; onClick?: () => void }
+  ): void {
+    const item = list.createDiv({ cls: "pm-db-item" });
+    const dot = item.createDiv({ cls: "pm-db-item-dot" });
+    dot.style.background = opts.color;
+    const main = item.createDiv({ cls: "pm-db-item-main" });
+    main.createDiv({ cls: "pm-db-item-title", text: opts.title });
+    main.createDiv({ cls: "pm-db-item-meta", text: opts.meta });
+    item.createDiv({ cls: `pm-db-item-val${opts.overdue ? " is-overdue" : ""}`, text: opts.value });
+
+    if (opts.onClick) {
+      item.setAttribute("tabindex", "0");
+      item.addEventListener("click", opts.onClick);
+      item.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); opts.onClick?.(); }
+      });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  تب تقویم
+  // ══════════════════════════════════════════════════════════════════════
+
+  private renderCalendarTab(root: HTMLElement, data: AnalyticsData): void {
+    const b = this.bounds(data);
+    const days = rangeDays(b.from, b.to);
+    const inRange = recordsInRange(data.records, b.from, b.to);
+    const perDay = hoursPerDay(inRange, days);
+    const today = todayISO();
+
+    const total = sumHours(recordsInRange(data.records, b.from, b.effTo));
+    const activeDays = days.filter((d) => (perDay.get(d) ?? 0) > 0).length;
+    const busiest = days.reduce(
+      (best, d) => ((perDay.get(d) ?? 0) > (perDay.get(best) ?? 0) ? d : best),
+      days[0] ?? today
+    );
+
+    const headline = root.createDiv({ cls: "pm-db-headline" });
+    heroFigure(headline, {
+      label: `Tracked · ${b.label}`,
+      value: formatNumber(total),
+      unit: "hours",
+      sub: `${activeDays} active day${activeDays === 1 ? "" : "s"} of ${days.length}`,
+    });
+    const tiles = headline.createDiv({ cls: "pm-db-tiles" });
+    statTile(tiles, {
+      label: "Busiest day",
+      value: formatNumber(perDay.get(busiest) ?? 0),
+      unit: "h",
+      sub: (perDay.get(busiest) ?? 0) > 0 ? jalaliLabel(busiest) : "nothing logged yet",
+    });
+    statTile(tiles, {
+      label: "Current streak",
+      value: String(currentStreak(data.byDay)),
+      unit: "days",
+      sub: `longest ${longestStreak(data.byDay)} days`,
+    });
+    statTile(tiles, {
+      label: "Days tracked",
+      value: String(Array.from(data.byDay.values()).filter((rs) => rs.some((r) => r.hours > 0)).length),
+      sub: "all time",
+    });
+
+    const card = chartCard(
+      root,
+      "Jalali calendar",
+      "Color shows how many hours were logged that day — click a day for the breakdown"
+    );
+    card.root.addClass("pm-db-wide");
+
+    renderCalendar(card.body, {
+      days,
+      hoursByDay: perDay,
+      todayISO: today,
+      selectedISO: this.selectedDay,
+      mode: b.calMode,
+      tooltip: this.tooltip!,
+      tipFor: (iso) => this.dayTip(iso, data, perDay.get(iso) ?? 0),
+      onSelect: (iso) => {
+        this.selectedDay = this.selectedDay === iso ? null : iso;
+        void this.render();
+      },
+    });
+    heatLegend(card.body);
+
+    card.setTable(
+      ["Date", "Date (Jalali)", "Weekday", "Hours", "Tasks"],
+      days.map((iso) => [
+        iso,
+        jalaliLabel(iso),
+        jalaliDayTitle(iso).split("،")[0],
+        formatHours(perDay.get(iso) ?? 0),
+        (data.byDay.get(iso) ?? []).map((r) => r.taskTitle).join(", ") || "—",
+      ])
+    );
+
+    this.renderDayPanel(root, data, this.selectedDay ?? today);
+  }
+
+  private dayTip(iso: string, data: AnalyticsData, hours: number): string[] {
+    const lines = [jalaliDayTitle(iso), `${formatHours(hours)} tracked`];
+    const records = data.byDay.get(iso) ?? [];
+    for (const rec of records.slice(0, 4)) {
+      lines.push(`• ${rec.taskTitle} — ${formatHours(rec.hours)}`);
+    }
+    if (records.length > 4) lines.push(`+${records.length - 4} more`);
+    lines.push(iso);
+    return lines;
+  }
+
+  private renderDayPanel(root: HTMLElement, data: AnalyticsData, iso: string): void {
+    const panel = root.createDiv({ cls: "pm-db-daypanel" });
+    const records = data.byDay.get(iso) ?? [];
+    const total = sumHours(records);
+
+    const head = panel.createDiv({ cls: "pm-db-dayhead" });
+    const left = head.createDiv();
+    left.createDiv({ cls: "pm-db-daytitle", text: jalaliDayTitle(iso) });
+    left.createDiv({ cls: "pm-db-daysub", text: iso });
+    head.createDiv({ cls: "pm-db-daytotal", text: formatHours(total) });
+
+    if (!records.length) {
+      panel.createDiv({ cls: "pm-db-empty", text: "No time logged on this day." });
+      return;
+    }
+
+    // ساعت‌های یک تسک در یک روز با هم جمع می‌شن — چند تایمر روی یک تسک یعنی یک ردیف
+    const byTask = new Map<string, { title: string; project: string; hours: number; slug: string }>();
+    for (const rec of records) {
+      const row = byTask.get(rec.taskSlug) ??
+        { title: rec.taskTitle, project: rec.projectSlug, hours: 0, slug: rec.taskSlug };
+      row.hours += rec.hours;
+      byTask.set(rec.taskSlug, row);
+    }
+
+    const list = panel.createDiv({ cls: "pm-db-list" });
+    for (const row of Array.from(byTask.values()).sort((a, b) => b.hours - a.hours)) {
+      const task = data.tasksBySlug.get(row.slug);
+      const share = total > 0 ? Math.round((row.hours / total) * 100) : 0;
+      this.renderListItem(list, {
+        color: task ? statusColor(task.status) : "var(--text-faint)",
+        title: row.title,
+        meta: `${row.project || "no project"}${task ? ` · ${task.status}` : ""} · ${share}% of the day`,
+        value: formatHours(row.hours),
+        onClick: () => { if (task) this.plugin.openTaskModal(task.file, this.currentWorkspace); },
+      });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  تب پروژه‌ها — همون تخته‌ی وضعیت‌محورِ قبلی
+  // ══════════════════════════════════════════════════════════════════════
+
+  private renderProjectsTab(root: HTMLElement, data: AnalyticsData): void {
+    const board = root.createDiv({ cls: "pm-kanban-board" });
+
+    for (const status of this.allStatuses(data.projects.map((p) => p.status))) {
+      const col = board.createDiv({ cls: "pm-kanban-col" });
+      col.style.setProperty("--pm-status-color", statusColor(status));
+      col.createDiv({ cls: "pm-col-strip" });
+      const header = col.createDiv({ cls: "pm-col-header" });
+      header.createSpan({ cls: "pm-col-title", text: status });
+
+      const colProjects = data.projects.filter((p) => {
+        if (this.filterPriority && p.priority !== this.filterPriority) return false;
+        if (this.filterStatus && p.status !== this.filterStatus) return false;
+        return p.status === status;
+      });
+
+      header.createSpan({ cls: "pm-col-count", text: String(colProjects.length) });
+
+      const cards = col.createDiv({ cls: "pm-col-cards" });
+      cards.setAttribute("data-status", status);
+
+      if (!colProjects.length) cards.createDiv({ cls: "pm-col-empty", text: "No projects here" });
+      for (const project of colProjects) this.renderProjectCard(cards, project);
+
+      cards.addEventListener("dragover", (e) => { e.preventDefault(); cards.addClass("pm-drag-over"); });
+      cards.addEventListener("dragleave", () => cards.removeClass("pm-drag-over"));
+      cards.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        cards.removeClass("pm-drag-over");
+        const projPath = e.dataTransfer?.getData("text/plain");
+        if (!projPath) return;
+        const file = this.app.vault.getAbstractFileByPath(projPath) as TFile | null;
+        if (!file) return;
+        await updateFrontmatterFields(this.app, file, { status });
+        this.plugin.refreshProjectDashboard();
+        this.plugin.refreshKanban();
+      });
+    }
+  }
+
+  private renderProjectCard(container: HTMLElement, project: ProjectInfo): void {
+    const overdue = !!project.due && project.due < todayISO() && !isClosedStatus(project.status);
+
+    const card = container.createDiv({ cls: "pm-task-card" });
+    card.setAttribute("draggable", "true");
+    card.setAttribute("data-path", project.file.path);
+    if (overdue) card.addClass("pm-overdue-card");
+    if (isMutedStatus(project.status)) card.addClass("pm-card-muted");
+
+    card.addEventListener("dragstart", (e) => {
+      e.dataTransfer?.setData("text/plain", project.file.path);
+      card.addClass("pm-dragging");
+    });
+    card.addEventListener("dragend", () => card.removeClass("pm-dragging"));
+
+    const priorityClass = `pm-priority-${project.priority.toLowerCase()}`;
+    card.createDiv({ cls: `pm-priority-badge ${priorityClass}`, text: project.priority });
+
+    const header = card.createDiv({ cls: "pm-project-card-header" });
+    header.createDiv({ cls: "pm-project-title", text: project.title });
+    const chip = header.createDiv({ cls: "pm-project-chip", text: project.status });
+    chip.style.setProperty("--pm-status-color", statusColor(project.status));
+
+    const meta = card.createDiv({ cls: "pm-project-meta" });
+    meta.createDiv({ cls: "pm-project-stat", text: `Due: ${project.due || "—"}` });
+    meta.createDiv({
+      cls: "pm-project-stat",
+      text: `Tasks: ${project.doneCount}/${project.taskCount} done`,
+    });
+    meta.createDiv({ cls: "pm-project-stat", text: `Hours: ${formatHours(project.hours)}` });
+
+    const actions = card.createDiv({ cls: "pm-project-actions" });
+    actions.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Edit" })
+      .addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.plugin.openProjectModal(project.file, this.currentWorkspace);
+      });
+    actions.createEl("button", { cls: "pm-btn", text: "Open note" })
+      .addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.app.workspace.getLeaf(false).openFile(project.file);
+      });
+
+    card.addEventListener("click", () => this.plugin.openProjectModal(project.file, this.currentWorkspace));
+
+    card.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const menu = new Menu();
+      menu.addItem((item) =>
+        item.setTitle("Open project note").setIcon("file-text").onClick(() => {
+          this.app.workspace.getLeaf(false).openFile(project.file);
+        })
+      );
+      menu.addItem((item) =>
+        item.setTitle("Edit project").setIcon("pencil").onClick(() => {
+          this.plugin.openProjectModal(project.file, this.currentWorkspace);
+        })
+      );
+      menu.showAtMouseEvent(e);
+    });
   }
 }

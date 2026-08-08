@@ -9,6 +9,8 @@ import { KanbanView, KANBAN_VIEW_TYPE } from "./views/KanbanView";
 import { ProjectDashboardView, PROJECT_DASHBOARD_VIEW_TYPE } from "./views/ProjectDashboardView";
 import { TaskModal } from "./views/TaskModal";
 import { ProjectModal } from "./views/ProjectModal";
+import { AnalyticsManager } from "./managers/AnalyticsManager";
+import { DASHBOARD_STYLES } from "./styles/dashboardStyles";
 
 export default class ProjectManagerPlugin extends Plugin {
   settings: ProjectManagerSettings;
@@ -16,6 +18,7 @@ export default class ProjectManagerPlugin extends Plugin {
   projectManager: ProjectManager;
   taskManager: TaskManager;
   timeTracker: TimeTracker;
+  analytics: AnalyticsManager;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -24,6 +27,7 @@ export default class ProjectManagerPlugin extends Plugin {
     this.projectManager = new ProjectManager(this.app);
     this.taskManager = new TaskManager(this.app);
     this.timeTracker = new TimeTracker(this.app, this.taskManager);
+    this.analytics = new AnalyticsManager(this.app);
 
     // Ensure all workspace folders exist
     for (const ws of this.settings.workspaces) {
@@ -93,8 +97,8 @@ export default class ProjectManagerPlugin extends Plugin {
     });
 
     // Ribbon icons for quick access
-    this.addRibbonIcon("folder-open", "Open Kanban Board", () => this.openKanban());
-    this.addRibbonIcon("folder-open", "Open Project Dashboard", () => this.openProjectDashboard());
+    this.addRibbonIcon("layout-kanban", "Open Kanban Board", () => this.openKanban());
+    this.addRibbonIcon("layout-dashboard", "Open Project Dashboard", () => this.openProjectDashboard());
 
     // Settings tab
     this.addSettingTab(new ProjectManagerSettingTab(this.app, this));
@@ -328,37 +332,6 @@ export default class ProjectManagerPlugin extends Plugin {
   border-radius: 8px;
 }
 
-.pm-dashboard-content {
-  padding: 16px;
-}
-.pm-dashboard-empty {
-  padding: 20px;
-  color: var(--text-muted);
-  font-size: 14px;
-}
-.pm-project-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-}
-.pm-project-card {
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 10px;
-  padding: 12px 13px 11px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.08);
-  user-select: none;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
-}
-.pm-project-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
-  background: var(--background-modifier-hover);
-}
 .pm-overdue-card {
   border-color: color-mix(in srgb, var(--color-red) 55%, var(--background-modifier-border));
 }
@@ -456,10 +429,12 @@ export default class ProjectManagerPlugin extends Plugin {
   margin-bottom: 5px;
   letter-spacing: 0.02em;
 }
-.pm-priority-low { background: color-mix(in srgb, var(--color-green) 18%, transparent); color: var(--color-green); }
-.pm-priority-medium { background: color-mix(in srgb, var(--color-yellow) 18%, transparent); color: var(--color-yellow); }
-.pm-priority-high { background: color-mix(in srgb, var(--color-orange) 18%, transparent); color: var(--color-orange); }
-.pm-priority-critical { background: color-mix(in srgb, var(--color-red) 18%, transparent); color: var(--color-red); }
+/* اولویت یک مقیاس شدت مرتبه، پس از پالت وضعیت (good→critical) رنگ می‌گیره،
+   نه از اسلات‌های دسته‌ای — و همیشه با متنِ خوانا کنارش، نه رنگِ تنها. */
+.pm-priority-low { background: color-mix(in srgb, var(--pm-status-good) 18%, transparent); color: var(--pm-status-good); }
+.pm-priority-medium { background: color-mix(in srgb, var(--pm-status-warning) 20%, transparent); color: var(--text-normal); }
+.pm-priority-high { background: color-mix(in srgb, var(--pm-status-serious) 20%, transparent); color: var(--text-normal); }
+.pm-priority-critical { background: color-mix(in srgb, var(--pm-status-critical) 18%, transparent); color: var(--pm-status-critical); }
 
 /* Small priority dot — used on Kanban task cards */
 .pm-pr-dot {
@@ -577,6 +552,6 @@ export default class ProjectManagerPlugin extends Plugin {
   padding: 12px;
   margin-bottom: 12px;
 }
-`;
+` + DASHBOARD_STYLES;
   }
 }

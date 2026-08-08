@@ -1,26 +1,49 @@
-// رنگ هر ستون کانبان بر اساس status — از پالت رنگی خودِ اوبسیدین (با هر تم سازگاره)،
-// نه رنگ ثابت، چون این‌ها با تم روشن/تاریک و تم‌های شخص ثالث هم درست کار می‌کنن.
-const STATUS_COLORS: Record<string, string> = {
-  "not started": "var(--color-blue)",
-  "in progress": "var(--interactive-accent)",
-  done: "var(--color-green)",
-  cancel: "var(--color-red)",
-  quite: "var(--color-purple)",
+// رنگ‌های status/priority از پالتِ اعتبارسنجی‌شده‌ی داشبورد میان (توکن‌های
+// --pm-cat-* و --pm-status-*, تعریف‌شده در styles/dashboardStyles.ts) نه از
+// متغیرهای تم. دلیلش اینه که این رنگ‌ها «داده» رمزگذاری می‌کنن: باید بین
+// کانبان و چارت‌ها یکی باشن و جداشدنی‌بودنشون زیر کوررنگی تضمین‌شده بمونه.
+// خودِ توکن‌ها برای تم روشن و تاریک دو مقدار جدا دارن، پس با تم عوض می‌شن.
+
+// ترتیب اسلات‌ها اتفاقی نیست: همین ترتیب (آبی، نارنجی، فیروزه‌ای، قرمز، بنفش)
+// با validate_palette تست شده — بدترین جفتِ همسایه ΔE ۶٫۹ زیر دوتان، که فقط
+// همراه رمزگذاری دوم مجازه؛ برای همین همه‌جا لجند/برچسب/فاصله‌ی ۲px داریم.
+const STATUS_SLOT: Record<string, number> = {
+  "not started": 1, // آبی
+  "in progress": 2, // نارنجی
+  done: 3,          // فیروزه‌ای
+  cancel: 8,        // قرمز
+  quite: 7,         // بنفش
 };
 
-const PRIORITY_COLORS: Record<string, string> = {
-  low: "var(--color-green)",
-  medium: "var(--color-yellow)",
-  high: "var(--color-orange)",
-  critical: "var(--color-red)",
+// اسلات‌های باقی‌مانده‌ی پالت برای وضعیت‌های دلخواهِ کاربر — هیچ‌وقت رنگ جدید
+// «ساخته» نمی‌شه، فقط از همین هشت‌تا انتخاب می‌شه.
+const FALLBACK_SLOTS = [4, 5, 6];
+
+const PRIORITY_TOKENS: Record<string, string> = {
+  low: "var(--pm-status-good)",
+  medium: "var(--pm-status-warning)",
+  high: "var(--pm-status-serious)",
+  critical: "var(--pm-status-critical)",
 };
+
+/** هش پایدار — تا یک وضعیت با فیلترشدن بقیه رنگش عوض نشه */
+function stableIndex(key: string, buckets: number): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return h % buckets;
+}
+
+export function statusSlot(status: string): number {
+  const key = (status ?? "").toLowerCase();
+  return STATUS_SLOT[key] ?? FALLBACK_SLOTS[stableIndex(key, FALLBACK_SLOTS.length)];
+}
 
 export function statusColor(status: string): string {
-  return STATUS_COLORS[status] ?? "var(--text-faint)";
+  return `var(--pm-cat-${statusSlot(status)})`;
 }
 
 export function priorityColor(priority: string): string {
-  return PRIORITY_COLORS[priority?.toLowerCase()] ?? "var(--text-faint)";
+  return PRIORITY_TOKENS[(priority ?? "").toLowerCase()] ?? "var(--text-faint)";
 }
 
 // این وضعیت‌ها دیگه کاری نیستن که لازم باشه هر بار توجه بگیرن — کم‌رنگ نشون داده می‌شن
