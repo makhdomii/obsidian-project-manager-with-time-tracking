@@ -3,6 +3,7 @@ import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
+import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
 import {
   AnalyticsData, TimeRecord, TaskInfo, ProjectInfo,
   currentStreak, groupHoursBy, hoursPerDay, isClosedStatus, isDoneStatus,
@@ -61,6 +62,8 @@ export class ProjectDashboardView extends ItemView {
    *  همه‌چیز به «امروز» گره نخورده و می‌شه ماه‌ها و سال‌های قبل رو دید. */
   private anchor: string = todayISO();
   private selectedDay: string | null = null;
+  /** مسیر پروژه‌هایی که متنی جز تمپلیت دارن → نشانگر روی کارت */
+  private noted: Map<string, NoteInfo> = new Map();
   private tooltip: ChartTooltip | null = null;
   private refreshInterval: number | null = null;
   private renderTimer: number | null = null;
@@ -128,7 +131,10 @@ export class ProjectDashboardView extends ItemView {
 
     if (this.tab === "overview") this.renderOverview(scroll, data);
     else if (this.tab === "calendar") this.renderCalendarTab(scroll, data);
-    else this.renderProjectsTab(scroll, data);
+    else {
+      this.noted = await this.plugin.noteScanner.scan(data.projects.map((p) => p.file));
+      this.renderProjectsTab(scroll, data);
+    }
 
     scroll.scrollTop = this.scrollTop;
   }
@@ -988,6 +994,8 @@ export class ProjectDashboardView extends ItemView {
 
     const header = card.createDiv({ cls: "pm-project-card-header" });
     header.createDiv({ cls: "pm-project-title", text: project.title });
+    const notes = this.noted.get(project.file.path);
+    if (notes) renderNoteBadge(header, notes);
     const chip = header.createDiv({ cls: "pm-project-chip", text: project.status });
     chip.style.setProperty("--pm-status-color", statusColor(project.status));
 

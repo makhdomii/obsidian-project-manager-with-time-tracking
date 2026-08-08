@@ -3,6 +3,7 @@ import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
+import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
 
 export const KANBAN_VIEW_TYPE = "project-manager-kanban";
 
@@ -11,6 +12,8 @@ export class KanbanView extends ItemView {
   currentWorkspace: Workspace;
   filterProject: string = "";
   filterPriority: string = "";
+  /** مسیر تسک‌هایی که متنی جز تمپلیت دارن → نشانگر روی کارت */
+  private noted: Map<string, NoteInfo> = new Map();
   private refreshInterval: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: ProjectManagerPlugin) {
@@ -64,6 +67,7 @@ export class KanbanView extends ItemView {
     const board = container.createDiv({ cls: "pm-kanban-board" });
     const statuses = this.plugin.settings.statuses;
     const tasks = await this.plugin.taskManager.getTasks(this.currentWorkspace);
+    this.noted = await this.plugin.noteScanner.scan(tasks);
 
     for (const status of statuses) {
       const col = board.createDiv({ cls: "pm-kanban-col" });
@@ -131,6 +135,8 @@ export class KanbanView extends ItemView {
     // Title + priority dot
     const head = card.createDiv({ cls: "pm-card-head" });
     head.createDiv({ cls: "pm-card-title", text: fm.title ?? file.basename });
+    const notes = this.noted.get(file.path);
+    if (notes) renderNoteBadge(head, notes);
     const prDot = head.createDiv({ cls: "pm-pr-dot" });
     prDot.style.setProperty("--pm-priority-color", priorityColor(fm.priority ?? "medium"));
     prDot.setAttribute("aria-label", `Priority: ${fm.priority ?? "medium"}`);

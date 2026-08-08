@@ -10,6 +10,7 @@ import { ProjectDashboardView, PROJECT_DASHBOARD_VIEW_TYPE } from "./views/Proje
 import { TaskModal } from "./views/TaskModal";
 import { ProjectModal } from "./views/ProjectModal";
 import { AnalyticsManager } from "./managers/AnalyticsManager";
+import { NoteScanner } from "./utils/NoteContent";
 import { DASHBOARD_STYLES } from "./styles/dashboardStyles";
 
 export default class ProjectManagerPlugin extends Plugin {
@@ -19,6 +20,7 @@ export default class ProjectManagerPlugin extends Plugin {
   taskManager: TaskManager;
   timeTracker: TimeTracker;
   analytics: AnalyticsManager;
+  noteScanner: NoteScanner;
   private styleEl: HTMLStyleElement | null = null;
 
   async onload(): Promise<void> {
@@ -29,6 +31,7 @@ export default class ProjectManagerPlugin extends Plugin {
     this.taskManager = new TaskManager(this.app);
     this.timeTracker = new TimeTracker(this.app, this.taskManager);
     this.analytics = new AnalyticsManager(this.app);
+    this.noteScanner = new NoteScanner(this.app);
 
     // Ensure all workspace folders exist
     for (const ws of this.settings.workspaces) {
@@ -356,6 +359,8 @@ export default class ProjectManagerPlugin extends Plugin {
   font-weight: 700;
   color: var(--text-normal);
   line-height: 1.3;
+  flex: 1;
+  min-width: 0;
 }
 .pm-project-chip {
   background: color-mix(in srgb, var(--pm-status-color, var(--text-faint)) 16%, transparent);
@@ -469,7 +474,22 @@ export default class ProjectManagerPlugin extends Plugin {
   font-weight: 600;
   color: var(--text-normal);
   line-height: 1.4;
+  /* عنوان فضا رو پر می‌کنه تا نشانگرِ یادداشت و نقطه‌ی اولویت بچسبن به راست */
+  flex: 1;
+  min-width: 0;
 }
+/* نشانگر «این نوت یادداشت داره» — همیشه کنار عنوان، تا اسکن ستون با یک نگاه
+   ممکن باشه. تولتیپش چند خط اولِ یادداشت رو نشون می‌ده. */
+.pm-note-badge {
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.7;
+  cursor: help;
+}
+.pm-note-badge:hover { opacity: 1; }
+
 .pm-card-meta {
   display: flex;
   align-items: center;
