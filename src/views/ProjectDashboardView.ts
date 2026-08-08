@@ -71,7 +71,7 @@ export class ProjectDashboardView extends ItemView {
 
   getViewType(): string { return PROJECT_DASHBOARD_VIEW_TYPE; }
   getDisplayText(): string { return "Project Dashboard"; }
-  getIcon(): string { return "layout-dashboard"; }
+  getIcon(): string { return "folder-open"; }
 
   async onOpen(): Promise<void> {
     await this.render();

@@ -19,6 +19,7 @@ export default class ProjectManagerPlugin extends Plugin {
   taskManager: TaskManager;
   timeTracker: TimeTracker;
   analytics: AnalyticsManager;
+  private styleEl: HTMLStyleElement | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -97,8 +98,8 @@ export default class ProjectManagerPlugin extends Plugin {
     });
 
     // Ribbon icons for quick access
-    this.addRibbonIcon("layout-kanban", "Open Kanban Board", () => this.openKanban());
-    this.addRibbonIcon("layout-dashboard", "Open Project Dashboard", () => this.openProjectDashboard());
+    this.addRibbonIcon("folder-open", "Open Kanban Board", () => this.openKanban());
+    this.addRibbonIcon("folder-open", "Open Project Dashboard", () => this.openProjectDashboard());
 
     // Settings tab
     this.addSettingTab(new ProjectManagerSettingTab(this.app, this));
@@ -106,6 +107,9 @@ export default class ProjectManagerPlugin extends Plugin {
 
   async onunload(): Promise<void> {
     this.app.workspace.detachLeavesOfType(KANBAN_VIEW_TYPE);
+    // تگ استایل باید با پلاگین بره، وگرنه لود بعدی روش می‌افته
+    this.styleEl?.remove();
+    this.styleEl = null;
   }
 
   async loadSettings(): Promise<void> {
@@ -177,11 +181,17 @@ export default class ProjectManagerPlugin extends Plugin {
 
   loadStyles(): void {
     const styleId = "pm-styles";
-    if (document.getElementById(styleId)) return;
-    const style = document.createElement("style");
-    style.id = styleId;
+    // قبلاً اگه تگ استایل از قبل بود، همین‌جا return می‌کرد — یعنی بعد از هر
+    // آپدیت یا reload پلاگین، استایلِ نسخه‌ی قبلی می‌موند و قواعد جدید هیچ‌وقت
+    // اعمال نمی‌شد. حالا محتوا همیشه بازنویسی می‌شه.
+    let style = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
     style.textContent = this.getStyles();
-    document.head.appendChild(style);
+    this.styleEl = style;
   }
 
   getStyles(): string {
