@@ -14,9 +14,9 @@ import {
   heroFigure, jalaliDayTitle, renderCalendar, stackedBar, statTile,
 } from "./DashboardCharts";
 import {
-  addDays, daysBetween, isoToJalali, jalaliLabel, jalaliMonthLabel, jalaliMonthLength,
-  jalaliToISO, rangeDays, seasonName, startOfJalaliMonth, startOfJalaliSeason,
-  startOfJalaliWeek, startOfJalaliYear, todayISO, toPersianDigits,
+  addDays, daysBetween, groupByJalaliMonth, isoToJalali, jalaliLabel, jalaliMonthLabel,
+  jalaliMonthLength, jalaliToISO, rangeDays, seasonName, shiftJalaliMonths, startOfJalaliMonth,
+  startOfJalaliSeason, startOfJalaliWeek, startOfJalaliYear, todayISO, toPersianDigits,
 } from "../utils/Jalali";
 
 export const PROJECT_DASHBOARD_VIEW_TYPE = "project-manager-project-dashboard";
@@ -55,8 +55,11 @@ export class ProjectDashboardView extends ItemView {
   filterStatus = "";
   filterPriority = "";
 
-  private tab: TabId = "overview";
+  private tab: TabId = "projects";
   private range: RangeId = "month";
+  /** روزی که بازه حولش حساب می‌شه — با فلش‌های ◀ ▶ جابه‌جا می‌شه، پس دیگه
+   *  همه‌چیز به «امروز» گره نخورده و می‌شه ماه‌ها و سال‌های قبل رو دید. */
+  private anchor: string = todayISO();
   private selectedDay: string | null = null;
   private tooltip: ChartTooltip | null = null;
   private refreshInterval: number | null = null;
@@ -161,6 +164,9 @@ export class ProjectDashboardView extends ItemView {
       await this.render();
     });
 
+    // پیمایش دوره — فقط جایی که دوره معنی داره
+    if (this.tab !== "projects") this.renderPeriodNav(toolbar);
+
     // فیلترهای وضعیت/اولویت فقط تب پروژه‌ها رو محدود می‌کنن — پس فقط همون‌جا نشون داده می‌شن
     if (this.tab === "projects") {
       const statusSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
@@ -212,6 +218,58 @@ export class ProjectDashboardView extends ItemView {
     }
   }
 
+  /** ◀ برچسبِ دوره ▶ + Today — دوره رو از «امروز» جدا می‌کنه */
+  private renderPeriodNav(toolbar: HTMLElement): void {
+    const nav = toolbar.createDiv({ cls: "pm-db-nav" });
+    // «All time» خودش کل بازه‌ست، جایی برای رفتن نداره
+    const navigable = this.range !== "all";
+
+    const prev = nav.createEl("button", { cls: "pm-db-navbtn", text: "‹" });
+    prev.setAttribute("aria-label", "Previous period");
+    prev.disabled = !navigable;
+    prev.addEventListener("click", () => this.shiftAnchor(-1));
+
+    nav.createDiv({ cls: "pm-db-navlabel", text: this.periodLabel() });
+
+    const next = nav.createEl("button", { cls: "pm-db-navbtn", text: "›" });
+    next.setAttribute("aria-label", "Next period");
+    next.disabled = !navigable;
+    next.addEventListener("click", () => this.shiftAnchor(1));
+
+    const todayBtn = nav.createEl("button", { cls: "pm-db-navtoday", text: "Today" });
+    todayBtn.disabled = !navigable || this.anchor === todayISO();
+    todayBtn.addEventListener("click", () => {
+      this.anchor = todayISO();
+      this.selectedDay = null;
+      this.scrollTop = 0;
+      void this.render();
+    });
+  }
+
+  /** برچسب دوره بدون نیاز به داده — قبل از collect لازمش داریم */
+  private periodLabel(): string {
+    const { jy, jm } = isoToJalali(this.anchor);
+    switch (this.range) {
+      case "week": return `هفته‌ی ${jalaliLabel(startOfJalaliWeek(this.anchor))}`;
+      case "season": return `${seasonName(jm)} ${toPersianDigits(jy)}`;
+      case "year": return `سال ${toPersianDigits(jy)}`;
+      case "all": return "All time";
+      default: return jalaliMonthLabel(jy, jm);
+    }
+  }
+
+  private shiftAnchor(dir: -1 | 1): void {
+    if (this.range === "week") {
+      this.anchor = addDays(this.anchor, dir * 7);
+    } else {
+      const step = this.range === "season" ? 3 : this.range === "year" ? 12 : 1;
+      this.anchor = shiftJalaliMonths(this.anchor, dir * step);
+    }
+    this.selectedDay = null;
+    this.scrollTop = 0;
+    void this.render();
+  }
+
   private renderTabs(container: HTMLElement): void {
     const tabs = container.createDiv({ cls: "pm-db-tabs" });
     for (const t of TABS) {
@@ -233,7 +291,8 @@ export class ProjectDashboardView extends ItemView {
 
   private bounds(data: AnalyticsData): RangeBounds {
     const today = todayISO();
-    const { jy, jm } = isoToJalali(today);
+    const anchor = this.anchor;
+    const { jy, jm } = isoToJalali(anchor);
     let from: string;
     let to: string;
     let label: string;
@@ -241,14 +300,14 @@ export class ProjectDashboardView extends ItemView {
 
     switch (this.range) {
       case "week": {
-        from = startOfJalaliWeek(today);
+        from = startOfJalaliWeek(anchor);
         to = addDays(from, 6);
         label = `هفته‌ی ${jalaliLabel(from)}`;
         calMode = "dots";
         break;
       }
       case "season": {
-        from = startOfJalaliSeason(today);
+        from = startOfJalaliSeason(anchor);
         const lastMonth = Math.floor((jm - 1) / 3) * 3 + 3;
         to = jalaliToISO(jy, lastMonth, jalaliMonthLength(jy, lastMonth));
         label = `${seasonName(jm)} ${toPersianDigits(jy)}`;
@@ -256,7 +315,7 @@ export class ProjectDashboardView extends ItemView {
         break;
       }
       case "year": {
-        from = startOfJalaliYear(today);
+        from = startOfJalaliYear(anchor);
         to = jalaliToISO(jy, 12, jalaliMonthLength(jy, 12));
         label = `سال ${toPersianDigits(jy)}`;
         calMode = "heatmap";
@@ -270,14 +329,16 @@ export class ProjectDashboardView extends ItemView {
         break;
       }
       default: {
-        from = startOfJalaliMonth(today);
+        from = startOfJalaliMonth(anchor);
         to = jalaliToISO(jy, jm, jalaliMonthLength(jy, jm));
         label = jalaliMonthLabel(jy, jm);
         calMode = "grid";
       }
     }
 
-    const effTo = to > today ? today : to;
+    // بازه‌ی گذشته کاملاً سپری‌شده؛ بازه‌ی آینده هنوز هیچ‌کدوم — «امروز» فقط
+    // بازه‌ی جاری رو نصف می‌کنه
+    const effTo = from > today ? to : to > today ? today : to;
     // دوره‌ی قبل دقیقاً به اندازه‌ی روزهای سپری‌شده‌ی همین دوره‌ست، نه کل دوره —
     // وگرنه ماهِ نیمه‌تمام همیشه از ماهِ کاملِ قبلی کمتر در میاد.
     const elapsed = Math.max(1, daysBetween(from, effTo) + 1);
@@ -712,7 +773,105 @@ export class ProjectDashboardView extends ItemView {
       ])
     );
 
-    this.renderDayPanel(root, data, this.selectedDay ?? today);
+    // اگر روزِ انتخاب‌شده بیرون از دوره‌ست (مثلاً بعد از جابه‌جایی ماه)، به‌جای
+    // نشون‌دادن یک روزِ نامربوط، شلوغ‌ترین روزِ همین دوره رو باز می‌کنیم
+    const inPeriod = this.selectedDay && this.selectedDay >= b.from && this.selectedDay <= b.to;
+    const fallback = today >= b.from && today <= b.to ? today : busiest;
+    this.renderDayPanel(root, data, inPeriod ? (this.selectedDay as string) : fallback);
+
+    const cards = root.createDiv({ cls: "pm-db-cards" });
+    cards.style.marginTop = "14px";
+    if (this.range !== "week" && this.range !== "month") {
+      this.renderMonthlyTotals(cards, data, b);
+    }
+    this.renderTaskBreakdown(cards, data, inRange, b);
+  }
+
+  /** جمع هر ماه شمسی — برای نمای فصلی/سالانه، با پرش به همون ماه */
+  private renderMonthlyTotals(parent: HTMLElement, data: AnalyticsData, b: RangeBounds): void {
+    const groups = groupByJalaliMonth(rangeDays(b.from, b.to));
+    const card = chartCard(parent, "Hours per month", `${b.label} · click a month to open it`);
+
+    const rows: BarRow[] = [];
+    const tableRows: (string | number)[][] = [];
+    for (const g of groups) {
+      const isos = new Set(g.isos);
+      const recs = data.records.filter((r) => isos.has(r.iso));
+      const hours = sumHours(recs);
+      const worked = recs.filter((r) => r.hours > 0);
+      const dayCount = new Set(worked.map((r) => r.iso)).size;
+      const taskCount = new Set(worked.map((r) => r.taskSlug)).size;
+      const label = jalaliMonthLabel(g.jy, g.jm);
+
+      rows.push({
+        label,
+        value: hours,
+        valueText: formatHours(hours),
+        tipLines: [label, `${formatHours(hours)} over ${dayCount} days`, `${taskCount} tasks`],
+        onClick: () => {
+          this.range = "month";
+          this.anchor = jalaliToISO(g.jy, g.jm, 1);
+          this.selectedDay = null;
+          this.scrollTop = 0;
+          void this.render();
+        },
+      });
+      tableRows.push([label, formatHours(hours), dayCount, taskCount]);
+    }
+
+    if (!rows.length) {
+      card.body.createDiv({ cls: "pm-db-empty", text: "No months in this range." });
+      return;
+    }
+    barListChart(card.body, rows, this.tooltip!);
+    card.setTable(["Month", "Hours", "Active days", "Tasks"], tableRows);
+  }
+
+  /** هر تسکی که توی این دوره روش کار شده — اسم، پروژه، ساعت، تعداد روز */
+  private renderTaskBreakdown(
+    parent: HTMLElement, data: AnalyticsData, inRange: TimeRecord[], b: RangeBounds
+  ): void {
+    const card = chartCard(parent, "Task breakdown", `Every task worked on in ${b.label}`);
+
+    const map = new Map<string, { slug: string; title: string; project: string; hours: number; days: Set<string> }>();
+    for (const rec of inRange) {
+      if (rec.hours <= 0) continue;
+      const row = map.get(rec.taskSlug) ?? {
+        slug: rec.taskSlug, title: rec.taskTitle, project: rec.projectSlug, hours: 0, days: new Set<string>(),
+      };
+      row.hours = Math.round((row.hours + rec.hours) * 100) / 100;
+      row.days.add(rec.iso);
+      map.set(rec.taskSlug, row);
+    }
+
+    const rows = Array.from(map.values()).sort((a, b2) => b2.hours - a.hours);
+    if (!rows.length) {
+      card.body.createDiv({ cls: "pm-db-empty", text: "No task time in this period." });
+      return;
+    }
+
+    const list = card.body.createDiv({ cls: "pm-db-list" });
+    for (const row of rows.slice(0, 12)) {
+      const task = data.tasksBySlug.get(row.slug);
+      this.renderListItem(list, {
+        color: task ? statusColor(task.status) : "var(--text-faint)",
+        title: row.title,
+        meta: `${row.project || "no project"}${task ? ` · ${task.status}` : ""} · ${row.days.size} day${row.days.size === 1 ? "" : "s"}`,
+        value: formatHours(row.hours),
+        onClick: () => { if (task) this.plugin.openTaskModal(task.file, this.currentWorkspace); },
+      });
+    }
+    if (rows.length > 12) {
+      card.body.createDiv({ cls: "pm-db-more", text: `+${rows.length - 12} more — open the table view` });
+    }
+
+    card.setTable(
+      ["Task", "Project", "Status", "Days", "Hours"],
+      rows.map((r) => {
+        const task = data.tasksBySlug.get(r.slug);
+        return [r.title, r.project || "—", task?.status ?? "—", r.days.size, formatHours(r.hours)];
+      })
+    );
   }
 
   private dayTip(iso: string, data: AnalyticsData, hours: number): string[] {

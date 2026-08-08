@@ -62,6 +62,36 @@ body.theme-dark {
 
 .pm-db-scroll { flex: 1; overflow-y: auto; padding: 18px 16px 28px; }
 
+/* ===== پیمایش دوره ===== */
+.pm-db-nav {
+  display: flex; align-items: center; gap: 2px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px; padding: 1px;
+  background: var(--background-primary);
+}
+.pm-db-navbtn, .pm-db-navtoday {
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  color: var(--text-muted); border-radius: 5px; padding: 3px 8px;
+}
+.pm-db-navbtn { font-size: 16px; line-height: 1; min-width: 24px; }
+.pm-db-navtoday {
+  font-size: 11px; font-weight: 600;
+  border-inline-start: 1px solid var(--background-modifier-border);
+  border-radius: 0 5px 5px 0; margin-inline-start: 2px;
+}
+.pm-db-navbtn:hover:not(:disabled), .pm-db-navtoday:hover:not(:disabled) {
+  background: var(--background-modifier-hover); color: var(--text-normal);
+}
+.pm-db-navbtn:disabled, .pm-db-navtoday:disabled { opacity: .35; cursor: default; }
+.pm-db-navlabel {
+  font-size: 12px; font-weight: 600; color: var(--text-normal);
+  min-width: 104px; text-align: center; unicode-bidi: plaintext;
+}
+
+.pm-db-more {
+  font-size: 11px; color: var(--text-faint); padding: 7px 8px 1px; text-align: center;
+}
+
 .pm-db-section { margin-bottom: 20px; }
 .pm-db-sectitle {
   font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;

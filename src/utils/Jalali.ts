@@ -252,3 +252,15 @@ export function startOfJalaliYear(iso: string): string {
   const { jy } = isoToJalali(iso);
   return jalaliToISO(jy, 1, 1);
 }
+
+/**
+ * چند ماه شمسی جلو/عقب. روز به آخرین روزِ ماه مقصد چفت می‌شه، چون مثلاً
+ * ۳۱ مرداد در مهر وجود نداره و ۳۰ اسفند فقط سال کبیسه هست.
+ */
+export function shiftJalaliMonths(iso: string, delta: number): string {
+  const { jy, jm, jd } = isoToJalali(iso);
+  const total = jy * 12 + (jm - 1) + delta;
+  const ny = Math.floor(total / 12);
+  const nm = total - ny * 12 + 1;
+  return jalaliToISO(ny, nm, Math.min(jd, jalaliMonthLength(ny, nm)));
+}
