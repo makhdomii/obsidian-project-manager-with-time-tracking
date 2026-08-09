@@ -85,6 +85,21 @@ export class TimeTracker {
     this.persist();
   }
 
+  /**
+   * شمارنده رو صفر می‌کنه ولی تایمر روی همون تسک باز می‌مونه. چیزی ثبت نمی‌شه،
+   * یعنی زمانِ شمرده‌شده از بین می‌ره. حالتِ پاز حفظ می‌شه: تایمرِ پازشده بعد
+   * از ریست هم پازه، نه این‌که یهو شروع کنه به شمردن.
+   */
+  reset(): void {
+    const t = this.activeTimer;
+    if (!t) throw new Error("No active timer");
+    const now = new Date().toISOString();
+    t.accumulatedMs = 0;
+    t.startedAt = now;
+    t.segmentStart = t.segmentStart ? now : null;
+    this.persist();
+  }
+
   // ── ذخیره/بازیابی ─────────────────────────────────────────────────────
 
   serialize(): ActiveTimer | null {

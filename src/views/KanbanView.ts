@@ -4,7 +4,7 @@ import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
-import { renderTimerBar, tickTimerDisplays } from "./TimerBar";
+import { renderTimerBar, resetTimerWithConfirm, tickTimerDisplays } from "./TimerBar";
 
 export const KANBAN_VIEW_TYPE = "project-manager-kanban";
 
@@ -198,6 +198,11 @@ export class KanbanView extends ItemView {
               this.plugin.timeTracker.togglePause();
               await this.render();
             })
+        );
+        menu.addItem((item) =>
+          item.setTitle("Reset timer").setIcon("rotate-ccw").onClick(() => {
+            resetTimerWithConfirm(this.app, this.plugin, () => void this.render());
+          })
         );
         menu.addItem((item) =>
           item.setTitle("Stop timer").setIcon("square").onClick(async () => {

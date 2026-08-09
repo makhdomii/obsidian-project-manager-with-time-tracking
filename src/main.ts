@@ -12,6 +12,7 @@ import { ProjectModal } from "./views/ProjectModal";
 import { AnalyticsManager } from "./managers/AnalyticsManager";
 import { NoteScanner } from "./utils/NoteContent";
 import { DASHBOARD_STYLES } from "./styles/dashboardStyles";
+import { resetTimerWithConfirm } from "./views/TimerBar";
 
 export default class ProjectManagerPlugin extends Plugin {
   settings: ProjectManagerSettings;
@@ -117,6 +118,15 @@ export default class ProjectManagerPlugin extends Plugin {
         const hours = await this.timeTracker.stopTimer(ws);
         new Notice(`Stopped. Logged ${hours}h`);
         this.refreshTimerViews();
+      },
+    });
+
+    this.addCommand({
+      id: "reset-timer",
+      name: "Reset Timer (keep running from zero)",
+      callback: () => {
+        if (!this.timeTracker.isRunning()) { new Notice("No timer running"); return; }
+        resetTimerWithConfirm(this.app, this, () => this.refreshTimerViews());
       },
     });
 
@@ -359,6 +369,14 @@ export default class ProjectManagerPlugin extends Plugin {
   padding: 0 4px;
 }
 .pm-elapsed-display.paused { color: var(--text-muted); }
+
+.pm-confirm .pm-confirm-body {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.pm-confirm .pm-modal-btns { justify-content: flex-end; }
 
 .pm-kanban-board {
   display: flex;

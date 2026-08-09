@@ -1,6 +1,46 @@
-import { Notice } from "obsidian";
+import { App, Notice } from "obsidian";
 import type ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
+import { ConfirmModal } from "./ConfirmModal";
+
+/** زیر این حد چیزی برای از دست دادن نیست، پس بی‌سؤال ریست می‌کنیم */
+const RESET_CONFIRM_THRESHOLD_MS = 60_000;
+
+/**
+ * ریست: شمارنده صفر می‌شه و هیچی ثبت نمی‌شه. چون زمانِ شمرده‌شده برنمی‌گرده،
+ * اگه چیز قابل‌توجهی روی تایمر باشه اول می‌پرسیم.
+ */
+export function resetTimerWithConfirm(
+  app: App,
+  plugin: ProjectManagerPlugin,
+  onChange: () => void
+): void {
+  const tracker = plugin.timeTracker;
+  if (!tracker.isRunning()) return;
+
+  const doReset = () => {
+    tracker.reset();
+    onChange();
+  };
+
+  if (tracker.getElapsedMs() < RESET_CONFIRM_THRESHOLD_MS) {
+    doReset();
+    return;
+  }
+
+  new ConfirmModal(app, {
+    title: "Reset timer?",
+    body:
+      `${tracker.getElapsed()} on “${tracker.getActiveTimer()?.taskTitle}” will be ` +
+      `discarded without being logged. The timer keeps running from zero.`,
+    confirmText: "Reset",
+    onConfirm: () => {
+      const lost = tracker.getElapsed();
+      doReset();
+      new Notice(`Timer reset — ${lost} discarded`);
+    },
+  }).open();
+}
 
 /**
  * نوارِ تایمرِ فعال — یک پیاده‌سازی، مشترک بین کانبان و داشبورد، تا دکمه‌ی
@@ -32,6 +72,15 @@ export function renderTimerBar(
   pauseBtn.addEventListener("click", () => {
     tracker.togglePause();
     onChange();
+  });
+
+  const resetBtn = bar.createEl("button", {
+    cls: "pm-btn pm-btn-secondary",
+    text: "⟲ Reset",
+    attr: { "aria-label": "Reset the timer to zero without logging" },
+  });
+  resetBtn.addEventListener("click", () => {
+    resetTimerWithConfirm(plugin.app, plugin, onChange);
   });
 
   const stopBtn = bar.createEl("button", { cls: "pm-btn pm-btn-danger", text: "⏹ Stop" });

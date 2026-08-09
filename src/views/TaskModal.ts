@@ -3,6 +3,7 @@ import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
+import { resetTimerWithConfirm } from "./TimerBar";
 
 export class TaskModal extends Modal {
   // پروژه‌هایی که هنوز باز نشدن یا در حال انجامن — فقط این‌ها موقع ساخت/ویرایش تسک قابل انتخابن
@@ -157,6 +158,17 @@ export class TaskModal extends Modal {
           elapsed.toggleClass("paused", paused);
           elapsed.textContent = this.plugin.timeTracker.getElapsed();
           this.plugin.refreshTimerViews();
+        });
+
+        const resetBtn = timerDiv.createEl("button", {
+          cls: "pm-btn pm-btn-secondary",
+          text: "⟲ Reset",
+        });
+        resetBtn.addEventListener("click", () => {
+          resetTimerWithConfirm(this.app, this.plugin, () => {
+            elapsed.textContent = this.plugin.timeTracker.getElapsed();
+            this.plugin.refreshTimerViews();
+          });
         });
 
         const stopBtn = timerDiv.createEl("button", { cls: "pm-btn pm-btn-danger", text: "⏹ Stop Timer" });
