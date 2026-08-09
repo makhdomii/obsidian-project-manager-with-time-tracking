@@ -22,6 +22,8 @@ export default class ProjectManagerPlugin extends Plugin {
   analytics: AnalyticsManager;
   noteScanner: NoteScanner;
   private styleEl: HTMLStyleElement | null = null;
+  /** تایمرِ خام از data.json — تا وقتی timeTracker ساخته بشه نگهش می‌داریم */
+  private persistedTimer: unknown = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -30,8 +32,11 @@ export default class ProjectManagerPlugin extends Plugin {
     this.projectManager = new ProjectManager(this.app);
     this.taskManager = new TaskManager(this.app);
     this.timeTracker = new TimeTracker(this.app, this.taskManager);
+    this.timeTracker.setPersistHandler(() => void this.savePluginData());
     this.analytics = new AnalyticsManager(this.app);
     this.noteScanner = new NoteScanner(this.app);
+
+    this.restoreTimer();
 
     // Ensure all workspace folders exist
     for (const ws of this.settings.workspaces) {
@@ -81,10 +86,25 @@ export default class ProjectManagerPlugin extends Plugin {
         try {
           this.timeTracker.startTimer(file.path, fm.title ?? file.basename, fm.workspace ?? this.settings.defaultWorkspaceId);
           new Notice(`Timer started: ${fm.title}`);
-          this.refreshKanban();
+          this.refreshTimerViews();
         } catch (err: any) {
           new Notice(err.message);
         }
+      },
+    });
+
+    this.addCommand({
+      id: "pause-timer",
+      name: "Pause / Resume Timer",
+      callback: () => {
+        if (!this.timeTracker.isRunning()) { new Notice("No timer running"); return; }
+        this.timeTracker.togglePause();
+        new Notice(
+          this.timeTracker.isPaused()
+            ? `Paused at ${this.timeTracker.getElapsed()}`
+            : `Resumed: ${this.timeTracker.getActiveTimer()?.taskTitle}`
+        );
+        this.refreshTimerViews();
       },
     });
 
@@ -96,7 +116,19 @@ export default class ProjectManagerPlugin extends Plugin {
         const ws = this.getCurrentWorkspace();
         const hours = await this.timeTracker.stopTimer(ws);
         new Notice(`Stopped. Logged ${hours}h`);
-        this.refreshKanban();
+        this.refreshTimerViews();
+      },
+    });
+
+    this.addCommand({
+      id: "discard-timer",
+      name: "Discard Timer (log nothing)",
+      callback: () => {
+        if (!this.timeTracker.isRunning()) { new Notice("No timer running"); return; }
+        const title = this.timeTracker.getActiveTimer()?.taskTitle;
+        this.timeTracker.discard();
+        new Notice(`Discarded timer: ${title}`);
+        this.refreshTimerViews();
       },
     });
 
@@ -115,12 +147,37 @@ export default class ProjectManagerPlugin extends Plugin {
     this.styleEl = null;
   }
 
+  /**
+   * data.json هم تنظیمات رو نگه می‌داره هم تایمرِ فعال رو. تنظیمات مثل قبل
+   * top-level می‌مونن (تا فایل‌های موجود بدون مهاجرت کار کنن) و تایمر کنارشون
+   * زیر کلید activeTimer می‌شینه.
+   */
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = ((await this.loadData()) ?? {}) as Record<string, unknown>;
+    const { activeTimer, ...settings } = data;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, settings);
+    this.persistedTimer = activeTimer ?? null;
+  }
+
+  /** تنها نویسنده‌ی data.json — تنظیمات و تایمر همیشه با هم نوشته می‌شن */
+  async savePluginData(): Promise<void> {
+    await this.saveData({ ...this.settings, activeTimer: this.timeTracker.serialize() });
   }
 
   async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
+    await this.savePluginData();
+  }
+
+  /** تایمرِ ذخیره‌شده رو برمی‌گردونه و به کاربر خبر می‌ده چقدر شمرده */
+  private restoreTimer(): void {
+    if (!this.timeTracker.restore(this.persistedTimer)) return;
+    const t = this.timeTracker.getActiveTimer();
+    if (!t) return;
+    const state = this.timeTracker.isPaused() ? "paused" : "still running";
+    new Notice(
+      `Timer restored (${state}): ${t.taskTitle} — ${this.timeTracker.getElapsed()}`,
+      8000
+    );
   }
 
   getCurrentWorkspace(): Workspace {
@@ -173,6 +230,12 @@ export default class ProjectManagerPlugin extends Plugin {
     const leaf = this.app.workspace.getLeaf(false);
     void leaf.setViewState({ type: PROJECT_DASHBOARD_VIEW_TYPE, active: true });
     this.app.workspace.revealLeaf(leaf);
+  }
+
+  /** بعد از هر تغییرِ وضعیتِ تایمر هر دو نما باید نو بشن، نه فقط کانبان */
+  refreshTimerViews(): void {
+    this.refreshKanban();
+    this.refreshProjectDashboard();
   }
 
   refreshProjectDashboard(): void {
@@ -259,7 +322,43 @@ export default class ProjectManagerPlugin extends Plugin {
   font-size: 12px;
   margin-left: auto;
 }
-.pm-timer-bar .pm-timer-elapsed { color: var(--interactive-accent); font-weight: 700; }
+.pm-timer-bar .pm-timer-elapsed {
+  color: var(--interactive-accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pm-timer-bar .pm-timer-task {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.pm-timer-bar .pm-btn { padding: 2px 9px; font-size: 11.5px; }
+
+/* پازشده: رنگ‌ها خنثی می‌شن و نبضِ نقطه می‌ایسته، تا یک نگاه کافی باشه */
+.pm-timer-bar.paused {
+  background: var(--background-secondary);
+  border-color: var(--background-modifier-border);
+}
+.pm-timer-bar.paused .pm-timer-elapsed { color: var(--text-muted); }
+.pm-timer-bar.paused .pm-timer-dot,
+.pm-card-timer.paused .pm-timer-dot {
+  animation: none;
+  background: var(--text-faint);
+}
+.pm-card-timer.paused { color: var(--text-muted); }
+.pm-timer-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.pm-elapsed-display.paused { color: var(--text-muted); }
 
 .pm-kanban-board {
   display: flex;

@@ -146,6 +146,19 @@ export class TaskModal extends Modal {
           elapsed.textContent = this.plugin.timeTracker.getElapsed();
         }, 1000);
 
+        const pauseBtn = timerDiv.createEl("button", {
+          cls: "pm-btn pm-btn-secondary",
+          text: this.plugin.timeTracker.isPaused() ? "▶ Resume" : "⏸ Pause",
+        });
+        pauseBtn.addEventListener("click", () => {
+          this.plugin.timeTracker.togglePause();
+          const paused = this.plugin.timeTracker.isPaused();
+          pauseBtn.textContent = paused ? "▶ Resume" : "⏸ Pause";
+          elapsed.toggleClass("paused", paused);
+          elapsed.textContent = this.plugin.timeTracker.getElapsed();
+          this.plugin.refreshTimerViews();
+        });
+
         const stopBtn = timerDiv.createEl("button", { cls: "pm-btn pm-btn-danger", text: "⏹ Stop Timer" });
         stopBtn.addEventListener("click", async () => {
           try {
@@ -153,7 +166,7 @@ export class TaskModal extends Modal {
             new Notice(`Stopped. Logged ${hours}h`);
             this.close();
             // Refresh kanban if open
-            this.plugin.refreshKanban();
+            this.plugin.refreshTimerViews();
           } catch (err: any) {
             new Notice(err.message);
           }
@@ -168,7 +181,7 @@ export class TaskModal extends Modal {
             this.plugin.timeTracker.startTimer(file.path, this.title, this.ws.id);
             new Notice(`Timer started: ${this.title}`);
             this.close();
-            this.plugin.refreshKanban();
+            this.plugin.refreshTimerViews();
           } catch (err: any) {
             new Notice(err.message);
           }
@@ -202,7 +215,7 @@ export class TaskModal extends Modal {
           const date = this.manualDate || todayString();
           await this.plugin.timeTracker.addManualEntry(this.ws, file, h, date);
           new Notice(`Added ${h}h for ${date}`);
-          this.plugin.refreshKanban();
+          this.plugin.refreshTimerViews();
           this.close();
         });
     }
@@ -253,7 +266,7 @@ export class TaskModal extends Modal {
       });
       new Notice(`Task saved: ${this.title}`);
     }
-    this.plugin.refreshKanban();
+    this.plugin.refreshTimerViews();
   }
 
   onClose(): void {

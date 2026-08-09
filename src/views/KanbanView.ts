@@ -4,6 +4,7 @@ import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
+import { renderTimerBar, tickTimerDisplays } from "./TimerBar";
 
 export const KANBAN_VIEW_TYPE = "project-manager-kanban";
 
@@ -29,9 +30,8 @@ export class KanbanView extends ItemView {
   async onOpen(): Promise<void> {
     await this.render();
     this.refreshInterval = window.setInterval(() => {
-      if (this.plugin.timeTracker.isRunning()) {
-        const timerEl = this.containerEl.querySelector(".pm-timer-elapsed");
-        if (timerEl) timerEl.textContent = this.plugin.timeTracker.getElapsed();
+      if (this.plugin.timeTracker.isTicking()) {
+        tickTimerDisplays(this.containerEl, this.plugin);
       }
     }, 1000);
 
@@ -155,9 +155,11 @@ export class KanbanView extends ItemView {
 
     // Timer indicator
     if (activePath === file.path) {
-      const timerDiv = card.createDiv({ cls: "pm-card-timer" });
+      const isPaused = this.plugin.timeTracker.isPaused();
+      const timerDiv = card.createDiv({ cls: `pm-card-timer${isPaused ? " paused" : ""}` });
       timerDiv.createSpan({ cls: "pm-timer-dot" });
       timerDiv.createSpan({ cls: "pm-timer-elapsed", text: this.plugin.timeTracker.getElapsed() });
+      if (isPaused) timerDiv.createSpan({ cls: "pm-timer-badge", text: "paused" });
     }
 
     // Click to open task modal
@@ -187,6 +189,16 @@ export class KanbanView extends ItemView {
         })
       );
       if (this.plugin.timeTracker.getActiveTaskPath() === file.path) {
+        const paused = this.plugin.timeTracker.isPaused();
+        menu.addItem((item) =>
+          item
+            .setTitle(paused ? "Resume timer" : "Pause timer")
+            .setIcon(paused ? "play" : "pause")
+            .onClick(async () => {
+              this.plugin.timeTracker.togglePause();
+              await this.render();
+            })
+        );
         menu.addItem((item) =>
           item.setTitle("Stop timer").setIcon("square").onClick(async () => {
             try {
@@ -265,20 +277,6 @@ export class KanbanView extends ItemView {
       });
 
     // Active timer display
-    if (this.plugin.timeTracker.isRunning()) {
-      const timerBar = toolbar.createDiv({ cls: "pm-timer-bar" });
-      timerBar.createSpan({ text: `⏱ ${this.plugin.timeTracker.getActiveTimer()?.taskTitle} — ` });
-      timerBar.createSpan({ cls: "pm-timer-elapsed", text: this.plugin.timeTracker.getElapsed() });
-      timerBar.createEl("button", { cls: "pm-btn pm-btn-danger", text: "Stop" })
-        .addEventListener("click", async () => {
-          try {
-            const hours = await this.plugin.timeTracker.stopTimer(this.currentWorkspace);
-            new Notice(`Stopped. Logged ${hours}h`);
-            await this.render();
-          } catch (err: any) {
-            new Notice(err.message);
-          }
-        });
-    }
+    renderTimerBar(toolbar, this.plugin, this.currentWorkspace, () => void this.render());
   }
 }

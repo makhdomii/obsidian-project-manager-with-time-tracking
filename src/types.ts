@@ -71,9 +71,22 @@ export interface TimeEntry {
   created: string;
 }
 
+/**
+ * تایمر فعال. همه‌چیزش سریالایزبله (تاریخ‌ها ISO string‌ان، نه Date) چون عیناً
+ * توی data.json ذخیره می‌شه تا اگه اوبسیدین کرش کرد یا بسته شد، تایمر از همون
+ * جایی که بود برگرده.
+ *
+ * مدت‌زمان از روی تایم‌استمپ‌ها حساب می‌شه نه از روی یه شمارنده‌ی در حافظه،
+ * برای همین لازم نیست هر ثانیه روی دیسک بنویسیم — فقط موقع تغییرِ وضعیت.
+ */
 export interface ActiveTimer {
   taskPath: string;
   taskTitle: string;
-  startTime: Date;
   workspaceId: string;
+  /** ISO — لحظه‌ی اولین start؛ همین به‌عنوان start_time توی time entry می‌شینه */
+  startedAt: string;
+  /** ISO — شروع سگمنتِ در حال اجرا. null یعنی الان پاز است. */
+  segmentStart: string | null;
+  /** میلی‌ثانیه‌ی جمع‌شده از سگمنت‌های تمام‌شده (قبل از پازهای قبلی) */
+  accumulatedMs: number;
 }

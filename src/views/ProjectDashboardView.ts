@@ -4,6 +4,7 @@ import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
+import { renderTimerBar, tickTimerDisplays } from "./TimerBar";
 import {
   AnalyticsData, TimeRecord, TaskInfo, ProjectInfo,
   currentStreak, groupHoursBy, hoursPerDay, isClosedStatus, isDoneStatus,
@@ -83,9 +84,8 @@ export class ProjectDashboardView extends ItemView {
     await this.render();
 
     this.refreshInterval = window.setInterval(() => {
-      if (this.plugin.timeTracker.isRunning()) {
-        const timerEl = this.containerEl.querySelector(".pm-timer-elapsed");
-        if (timerEl) timerEl.textContent = this.plugin.timeTracker.getElapsed();
+      if (this.plugin.timeTracker.isTicking()) {
+        tickTimerDisplays(this.containerEl, this.plugin);
       }
     }, 1000);
 
@@ -207,21 +207,7 @@ export class ProjectDashboardView extends ItemView {
     toolbar.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Kanban" })
       .addEventListener("click", () => this.plugin.openKanban());
 
-    if (this.plugin.timeTracker.isRunning()) {
-      const timerBar = toolbar.createDiv({ cls: "pm-timer-bar" });
-      timerBar.createSpan({ text: `⏱ ${this.plugin.timeTracker.getActiveTimer()?.taskTitle} — ` });
-      timerBar.createSpan({ cls: "pm-timer-elapsed", text: this.plugin.timeTracker.getElapsed() });
-      timerBar.createEl("button", { cls: "pm-btn pm-btn-danger", text: "Stop" })
-        .addEventListener("click", async () => {
-          try {
-            const hours = await this.plugin.timeTracker.stopTimer(this.currentWorkspace);
-            new Notice(`Stopped. Logged ${hours}h`);
-            await this.render();
-          } catch (err: any) {
-            new Notice(err.message);
-          }
-        });
-    }
+    renderTimerBar(toolbar, this.plugin, this.currentWorkspace, () => void this.render());
   }
 
   /** ◀ برچسبِ دوره ▶ + Today — دوره رو از «امروز» جدا می‌کنه */
