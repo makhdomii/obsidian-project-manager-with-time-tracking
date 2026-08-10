@@ -8,6 +8,7 @@
 import { App, TFile } from "obsidian";
 import { Workspace } from "../types";
 import { toISODate, todayISO, addDays, daysBetween } from "../utils/Jalali";
+import { normalizeStatus } from "../utils/StatusColors";
 
 export interface TimeRecord {
   iso: string;          // روزِ محلی که این زمان روش ثبت شده
@@ -132,7 +133,7 @@ export class AnalyticsManager {
         file,
         slug: file.basename,
         title: String(fm.title ?? file.basename),
-        status: String(fm.status ?? "not started"),
+        status: normalizeStatus(fm.status ?? "todo"),
         priority: String(fm.priority ?? "medium"),
         projectSlug: unlink(fm.project),
         due: String(fm.due ?? ""),
@@ -157,7 +158,7 @@ export class AnalyticsManager {
         file,
         slug,
         title: String(fm.title ?? file.basename),
-        status: String(fm.status ?? "not started"),
+        status: normalizeStatus(fm.status ?? "todo"),
         priority: String(fm.priority ?? "medium"),
         due: String(fm.due ?? ""),
         created: String(fm.created ?? ""),

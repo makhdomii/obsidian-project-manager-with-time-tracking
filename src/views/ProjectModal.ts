@@ -2,6 +2,7 @@ import { App, Modal, TFile, Notice, Setting } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
+import { normalizeStatus } from "../utils/StatusColors";
 
 export class ProjectModal extends Modal {
   plugin: ProjectManagerPlugin;
@@ -10,7 +11,7 @@ export class ProjectModal extends Modal {
   isNew: boolean;
 
   title = "";
-  status = "not started";
+  status = "todo";
   priority = "medium";
   due = "";
 
@@ -29,7 +30,7 @@ export class ProjectModal extends Modal {
     if (file) {
       const fm = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
       this.title = fm.title ?? file.basename;
-      this.status = fm.status ?? "not started";
+      this.status = normalizeStatus(fm.status ?? "todo");
       this.priority = fm.priority ?? "medium";
       this.due = fm.due ?? "";
     }

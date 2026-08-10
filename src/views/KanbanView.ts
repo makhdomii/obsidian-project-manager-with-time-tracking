@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf, TFile, Menu, Notice } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
-import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
+import { statusColor, priorityColor, isMutedStatus, normalizeStatus } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
 import { renderTimerBar, resetTimerWithConfirm, tickTimerDisplays } from "./TimerBar";
 
@@ -75,7 +75,7 @@ export class KanbanView extends ItemView {
       const colFiltered = tasks.filter((f) => {
         const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
         if (!fm) return false;
-        if (fm.status !== status) return false;
+        if (normalizeStatus(fm.status) !== status) return false;
         if (this.filterProject && fm.project !== `[[${this.filterProject}]]`) return false;
         if (this.filterPriority && fm.priority !== this.filterPriority) return false;
         return true;

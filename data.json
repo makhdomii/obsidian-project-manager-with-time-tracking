@@ -20,8 +20,8 @@
   "defaultWorkspaceId": "default",
   "dateFormat": "YYYY-MM-DD",
   "statuses": [
-    "not started",
-    "in progress",
+    "todo",
+    "active",
     "done",
     "cancel",
     "quite"

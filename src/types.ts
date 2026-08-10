@@ -28,7 +28,7 @@ export const DEFAULT_SETTINGS: ProjectManagerSettings = {
   ],
   defaultWorkspaceId: "default",
   dateFormat: "YYYY-MM-DD",
-  statuses: ["not started", "in progress", "done", "cancel", "quite"],
+  statuses: ["todo", "active", "done", "cancel", "quite"],
   priorities: ["low", "medium", "high", "critical"],
 };
 

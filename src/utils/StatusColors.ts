@@ -8,12 +8,25 @@
 // با validate_palette تست شده — بدترین جفتِ همسایه ΔE ۶٫۹ زیر دوتان، که فقط
 // همراه رمزگذاری دوم مجازه؛ برای همین همه‌جا لجند/برچسب/فاصله‌ی ۲px داریم.
 const STATUS_SLOT: Record<string, number> = {
-  "not started": 1, // آبی
-  "in progress": 2, // نارنجی
-  done: 3,          // فیروزه‌ای
-  cancel: 8,        // قرمز
-  quite: 7,         // بنفش
+  todo: 1,    // آبی
+  active: 2,  // نارنجی
+  done: 3,    // فیروزه‌ای
+  cancel: 8,  // قرمز
+  quite: 7,   // بنفش
 };
+
+// نام‌های قدیمی. نوت‌هایی که مهاجرت نکردن (مثلاً از یه بکاپ برگشتن) نباید از
+// تخته غیب بشن، پس موقع خوندن به نام جدید ترجمه می‌شن.
+const LEGACY_STATUS: Record<string, string> = {
+  "not started": "todo",
+  "in progress": "active",
+};
+
+/** status فرontmatter → نامِ متعارف: lowercase و بدون نام‌های قدیمی */
+export function normalizeStatus(status: unknown): string {
+  const key = String(status ?? "").trim().toLowerCase();
+  return LEGACY_STATUS[key] ?? key;
+}
 
 // اسلات‌های باقی‌مانده‌ی پالت برای وضعیت‌های دلخواهِ کاربر — هیچ‌وقت رنگ جدید
 // «ساخته» نمی‌شه، فقط از همین هشت‌تا انتخاب می‌شه.
@@ -34,7 +47,7 @@ function stableIndex(key: string, buckets: number): number {
 }
 
 export function statusSlot(status: string): number {
-  const key = (status ?? "").toLowerCase();
+  const key = normalizeStatus(status);
   return STATUS_SLOT[key] ?? FALLBACK_SLOTS[stableIndex(key, FALLBACK_SLOTS.length)];
 }
 
@@ -50,5 +63,5 @@ export function priorityColor(priority: string): string {
 const MUTED_STATUSES = new Set(["done", "cancel", "quite"]);
 
 export function isMutedStatus(status: string): boolean {
-  return MUTED_STATUSES.has(status);
+  return MUTED_STATUSES.has(normalizeStatus(status));
 }

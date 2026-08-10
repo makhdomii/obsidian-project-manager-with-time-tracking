@@ -4,10 +4,11 @@ import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 import { resetTimerWithConfirm } from "./TimerBar";
+import { normalizeStatus } from "../utils/StatusColors";
 
 export class TaskModal extends Modal {
   // پروژه‌هایی که هنوز باز نشدن یا در حال انجامن — فقط این‌ها موقع ساخت/ویرایش تسک قابل انتخابن
-  private static readonly ACTIVE_PROJECT_STATUSES = ["not started", "in progress"];
+  private static readonly ACTIVE_PROJECT_STATUSES = ["todo", "active"];
 
   plugin: ProjectManagerPlugin;
   file: TFile | null;
@@ -18,7 +19,7 @@ export class TaskModal extends Modal {
   // Form fields
   title = "";
   projectSlug = "";
-  status = "not started";
+  status = "todo";
   priority = "medium";
   due = "";
   manualHours = "";
@@ -40,7 +41,7 @@ export class TaskModal extends Modal {
       const fm = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
       this.title = fm.title ?? file.basename;
       this.projectSlug = (fm.project ?? "").replace(/^\[\[|\]\]$/g, "");
-      this.status = fm.status ?? "not started";
+      this.status = normalizeStatus(fm.status ?? "todo");
       this.priority = fm.priority ?? "medium";
       this.due = fm.due ?? "";
     }
@@ -58,10 +59,10 @@ export class TaskModal extends Modal {
           .filter((f: any) => !Array.isArray(f.children) && f.name?.endsWith(".md"))
           .filter((f: any) => {
               const slug = (f.name as string).replace(/\.md$/, "");
-              // پروژه‌ی همین تسک رو همیشه نگه دار، حتی اگه وضعیتش از "not started"/"in progress" خارج شده باشه
+              // پروژه‌ی همین تسک رو همیشه نگه دار، حتی اگه وضعیتش از "todo"/"active" خارج شده باشه
               if (slug === this.projectSlug) return true;
               const status = this.app.metadataCache.getFileCache(f as TFile)?.frontmatter?.status;
-              return TaskModal.ACTIVE_PROJECT_STATUSES.includes(status);
+              return TaskModal.ACTIVE_PROJECT_STATUSES.includes(normalizeStatus(status));
           })
           .map((f: any) => (f.name as string).replace(/\.md$/, ""))
           .sort();
