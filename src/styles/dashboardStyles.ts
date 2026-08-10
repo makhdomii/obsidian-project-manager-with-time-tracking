@@ -252,7 +252,7 @@ body.theme-dark {
 .pm-db-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .pm-db-legitem { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 .pm-db-legdot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
-.pm-db-legname { color: var(--text-muted); text-transform: capitalize; }
+.pm-db-legname { color: var(--text-muted); }
 .pm-db-legval { color: var(--text-normal); font-weight: 650; font-variant-numeric: tabular-nums; }
 
 /* ===== تقویم شمسی ===== */

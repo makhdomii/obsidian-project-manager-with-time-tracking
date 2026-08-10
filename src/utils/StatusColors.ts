@@ -15,17 +15,12 @@ const STATUS_SLOT: Record<string, number> = {
   quite: 7,   // بنفش
 };
 
-// نام‌های قدیمی. نوت‌هایی که مهاجرت نکردن (مثلاً از یه بکاپ برگشتن) نباید از
-// تخته غیب بشن، پس موقع خوندن به نام جدید ترجمه می‌شن.
-const LEGACY_STATUS: Record<string, string> = {
-  "not started": "todo",
-  "in progress": "active",
-};
-
-/** status فرontmatter → نامِ متعارف: lowercase و بدون نام‌های قدیمی */
+/**
+ * status فرontmatter → نامِ متعارف. فقط lowercase و trim — هیچ نگاشتی از
+ * نام‌های قدیمی نداریم؛ نام قدیمی یعنی داده‌ی مهاجرت‌نکرده، نه یه مترادف.
+ */
 export function normalizeStatus(status: unknown): string {
-  const key = String(status ?? "").trim().toLowerCase();
-  return LEGACY_STATUS[key] ?? key;
+  return String(status ?? "").trim().toLowerCase();
 }
 
 // اسلات‌های باقی‌مانده‌ی پالت برای وضعیت‌های دلخواهِ کاربر — هیچ‌وقت رنگ جدید
