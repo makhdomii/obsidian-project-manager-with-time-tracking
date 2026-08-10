@@ -11,6 +11,7 @@ import { TaskModal } from "./views/TaskModal";
 import { ProjectModal } from "./views/ProjectModal";
 import { AnalyticsManager } from "./managers/AnalyticsManager";
 import { ArchiveManager } from "./managers/ArchiveManager";
+import { ProjectManagerApi, createApi } from "./api";
 import { defaultArchiveFolder } from "./utils/WorkspacePaths";
 import { NoteScanner } from "./utils/NoteContent";
 import { DASHBOARD_STYLES } from "./styles/dashboardStyles";
@@ -25,6 +26,8 @@ export default class ProjectManagerPlugin extends Plugin {
   analytics: AnalyticsManager;
   noteScanner: NoteScanner;
   archiveManager: ArchiveManager;
+  /** سطحِ عمومی برای پلاگین‌های دیگه — نگاه کن به src/api.ts */
+  api: ProjectManagerApi;
   private styleEl: HTMLStyleElement | null = null;
   /** تایمرِ خام از data.json — تا وقتی timeTracker ساخته بشه نگهش می‌داریم */
   private persistedTimer: unknown = null;
@@ -40,6 +43,7 @@ export default class ProjectManagerPlugin extends Plugin {
     this.analytics = new AnalyticsManager(this.app);
     this.noteScanner = new NoteScanner(this.app);
     this.archiveManager = new ArchiveManager(this.app, this.workspaceManager);
+    this.api = createApi(this);
 
     this.restoreTimer();
     await this.migrateStatusNames();

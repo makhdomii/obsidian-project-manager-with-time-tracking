@@ -1,37 +1,45 @@
 import { App, TFile, normalizePath } from "obsidian";
 import { Workspace, TaskFrontmatter } from "../types";
-import { slugify } from "../utils/FrontmatterUtils";
+import { slugify, yamlString } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 import { isUnderAnyFolder, taskFolders } from "../utils/WorkspacePaths";
 
 export class TaskManager {
   constructor(private app: App) {}
 
+  /**
+   * @param extra فیلدهای اضافیِ frontmatter — مثلاً شناسه‌ی منبعِ بیرونی، تا
+   *              وارد‌کننده‌ها بتونن تشخیص بدن این تسک قبلاً ساخته شده
+   */
   async createTask(
     ws: Workspace,
     title: string,
     projectSlug: string,
     status: string,
     priority: string,
-    due: string
+    due: string,
+    extra?: Record<string, string | number>
   ): Promise<TFile> {
-    const slug = slugify(title);
-    const path = normalizePath(`${ws.tasksFolder}/${slug}.md`);
+    const path = await this.uniqueTaskPath(ws, slugify(title));
+
+    const extraLines = Object.entries(extra ?? {})
+      .map(([k, v]) => `${k}: ${typeof v === "number" ? v : yamlString(String(v))}\n`)
+      .join("");
 
     const frontmatter = `---
 type: task
-title: "${title}"
+title: ${yamlString(title)}
 project: "[[${projectSlug}]]"
-status: "${status}"
-priority: "${priority}"
+status: ${yamlString(status)}
+priority: ${yamlString(priority)}
 start: ""
 end: ""
 created: "${todayString()}"
-due: "${due}"
+due: ${yamlString(due)}
 total_hours: 0
 days_count: 0
 workspace: "[[${ws.name}]]"
----
+${extraLines}---
 
 # ${title}
 
@@ -43,6 +51,21 @@ workspace: "[[${ws.name}]]"
 
     const file = await this.app.vault.create(path, frontmatter);
     return file;
+  }
+
+  /**
+   * دو تسکِ متفاوت می‌تونن عنوانِ یکسان داشته باشن (مخصوصاً وقتی دسته‌ای وارد
+   * می‌شن). قبلاً vault.create توی این حالت خطا می‌داد.
+   */
+  private async uniqueTaskPath(ws: Workspace, slug: string): Promise<string> {
+    const base = slug || "task";
+    let path = normalizePath(`${ws.tasksFolder}/${base}.md`);
+    let n = 2;
+    while (this.app.vault.getAbstractFileByPath(path)) {
+      path = normalizePath(`${ws.tasksFolder}/${base}-${n}.md`);
+      n++;
+    }
+    return path;
   }
 
   /** شامل تسک‌های بایگانی‌شده هم می‌شه — وگرنه ستون done خالی می‌مونه */

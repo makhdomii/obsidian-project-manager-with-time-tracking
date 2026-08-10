@@ -28,6 +28,17 @@ export async function updateFrontmatterFields(
   });
 }
 
+/**
+ * یک مقدار رو به‌شکلِ رشته‌ی نقل‌قول‌شده‌ی YAML درمی‌آره.
+ *
+ * عنوان‌ها قبلاً مستقیم داخل "..." تزریق می‌شدن؛ یک کوتیشن توی عنوان کافی بود
+ * تا کلِ frontmatter خراب بشه — که برای عنوان‌هایی که از بیرون میان (مثلاً
+ * کارت‌های Codecks) اصلاً بعید نیست.
+ */
+export function yamlString(value: string): string {
+  return `"${String(value ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r?\n/g, " ")}"`;
+}
+
 export function slugify(title: string): string {
   return title.toLowerCase()
     .replace(/\s+/g, "-")
