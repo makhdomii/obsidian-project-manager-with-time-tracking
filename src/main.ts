@@ -217,13 +217,13 @@ export default class ProjectManagerPlugin extends Plugin {
       "not started": "todo",
       "in progress": "active",
     };
-    const before = this.settings.statuses.join(" ");
+    const before = this.settings.statuses.join("\u0000");
     const renamed = this.settings.statuses.map((s) => {
       const key = String(s).trim().toLowerCase();
       return RENAMES[key] ?? key;
     });
     this.settings.statuses = [...new Set(renamed)];
-    if (this.settings.statuses.join(" ") !== before) {
+    if (this.settings.statuses.join("\u0000") !== before) {
       await this.savePluginData();
     }
   }
@@ -371,6 +371,7 @@ export default class ProjectManagerPlugin extends Plugin {
   background: var(--background-secondary);
   border-bottom: 1px solid var(--background-modifier-border);
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .pm-ws-select, .pm-filter-select, .pm-filter-input {
@@ -468,13 +469,17 @@ export default class ProjectManagerPlugin extends Plugin {
   cursor: default;
 }
 
+/* ستون‌ها هم‌قد تخته‌ان و خودشان اسکرول می‌شن. قبلاً align-items: flex-start
+   بود و هر ستون تا اندازه‌ی محتواش کش می‌اومد، یعنی یک ستونِ done با ۲۰ کارت
+   کلِ صفحه رو بلند می‌کرد و برای دیدن بقیه‌ی ستون‌ها باید اسکرول می‌کردی. */
 .pm-kanban-board {
   display: flex;
   gap: 14px;
   padding: 16px;
   overflow-x: auto;
   flex: 1;
-  align-items: flex-start;
+  min-height: 0;
+  align-items: stretch;
 }
 
 .pm-kanban-col {
@@ -487,6 +492,8 @@ export default class ProjectManagerPlugin extends Plugin {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .pm-col-strip {
@@ -537,6 +544,36 @@ export default class ProjectManagerPlugin extends Plugin {
   min-height: 50px;
   padding: 2px 8px 10px;
   transition: background 0.15s;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+}
+/* اسکرول‌بارِ ستون فقط وقتی موس روش هست دیده بشه — پنج‌تا نوارِ همیشگی شلوغه */
+.pm-col-cards::-webkit-scrollbar { width: 8px; }
+.pm-col-cards::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.pm-kanban-col:hover .pm-col-cards::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+}
+
+.pm-col-more {
+  margin: 2px 2px 0;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pm-col-more:hover {
+  color: var(--text-normal);
+  border-style: solid;
+  background: var(--background-modifier-hover);
 }
 .pm-col-cards.pm-drag-over {
   background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);

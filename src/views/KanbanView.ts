@@ -9,6 +9,9 @@ import { renderTimerBar, resetTimerWithConfirm, tickTimerDisplays } from "./Time
 
 export const KANBAN_VIEW_TYPE = "project-manager-kanban";
 
+/** چند کارت از یک ستونِ بسته پیش‌فرض دیده بشه */
+const COLLAPSED_LIMIT = 8;
+
 export class KanbanView extends ItemView {
   plugin: ProjectManagerPlugin;
   currentWorkspace: Workspace;
@@ -16,6 +19,8 @@ export class KanbanView extends ItemView {
   filterPriority: string = "";
   /** مسیر تسک‌هایی که متنی جز تمپلیت دارن → نشانگر روی کارت */
   private noted: Map<string, NoteInfo> = new Map();
+  /** ستون‌های بسته‌ای که کاربر بازشون کرده — باید از رندرِ بعدی جون سالم ببره */
+  private expandedCols: Set<string> = new Set();
   private refreshInterval: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: ProjectManagerPlugin) {
@@ -82,6 +87,16 @@ export class KanbanView extends ItemView {
         return true;
       });
 
+      // ستون‌های بسته با گذشتِ زمان فقط بلندتر می‌شن و چیزی که تازه بسته شده
+      // ته صفحه گم می‌شه — پس تازه‌ترین‌ها اول، و بقیه پشت یه دکمه.
+      const closed = isMutedStatus(status);
+      if (closed) {
+        colFiltered.sort((a, b) => b.stat.mtime - a.stat.mtime);
+      }
+      const expanded = this.expandedCols.has(status);
+      const hidden = closed && !expanded ? Math.max(0, colFiltered.length - COLLAPSED_LIMIT) : 0;
+      const visible = hidden > 0 ? colFiltered.slice(0, COLLAPSED_LIMIT) : colFiltered;
+
       col.createDiv({ cls: "pm-col-strip" });
       const header = col.createDiv({ cls: "pm-col-header" });
       header.createSpan({ cls: "pm-col-title", text: status });
@@ -93,8 +108,21 @@ export class KanbanView extends ItemView {
       if (colFiltered.length === 0) {
         cards.createDiv({ cls: "pm-col-empty", text: "No tasks here" });
       }
-      for (const task of colFiltered) {
+      for (const task of visible) {
         this.renderTaskCard(cards, task, status);
+      }
+
+      if (hidden > 0 || (closed && expanded && colFiltered.length > COLLAPSED_LIMIT)) {
+        const toggle = cards.createEl("button", {
+          cls: "pm-col-more",
+          text: hidden > 0 ? `Show ${hidden} older` : "Show fewer",
+        });
+        toggle.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (expanded) this.expandedCols.delete(status);
+          else this.expandedCols.add(status);
+          await this.render();
+        });
       }
 
       // Drop zone
