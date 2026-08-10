@@ -2,6 +2,7 @@ import { App, TFile, normalizePath } from "obsidian";
 import { Workspace, ProjectFrontmatter } from "../types";
 import { slugify } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
+import { isUnderAnyFolder, projectFolders, taskFolders } from "../utils/WorkspacePaths";
 
 export class ProjectManager {
   constructor(private app: App) {}
@@ -39,11 +40,13 @@ workspace: "[[${ws.name}]]"
     return file;
   }
 
+  /** شامل پروژه‌های بایگانی‌شده هم می‌شه */
   async getProjects(ws: Workspace): Promise<TFile[]> {
     const files = this.app.vault.getMarkdownFiles();
+    const folders = projectFolders(ws);
     const result: TFile[] = [];
     for (const file of files) {
-      if (!file.path.startsWith(ws.projectsFolder)) continue;
+      if (!isUnderAnyFolder(file.path, folders)) continue;
       const cache = this.app.metadataCache.getFileCache(file);
       if (cache?.frontmatter?.type === "project" && cache?.frontmatter?.workspace === `[[${ws.name}]]`) {
         result.push(file);
@@ -53,12 +56,15 @@ workspace: "[[${ws.name}]]"
   }
 
   async updateProjectStats(app: App, ws: Workspace, projectSlug: string): Promise<void> {
-    const projectPath = normalizePath(`${ws.projectsFolder}/${projectSlug}.md`);
-    const projectFile = app.vault.getAbstractFileByPath(projectPath) as TFile | null;
+    // پروژه ممکنه بایگانی شده باشه، پس با مسیرِ ثابت پیداش نمی‌کنیم
+    const projectFile = (await this.getProjects(ws)).find((f) => f.basename === projectSlug);
     if (!projectFile) return;
 
+    // تسک‌های بایگانی‌شده هم باید شمرده بشن، وگرنه به محضِ بسته‌شدنِ پروژه
+    // ساعت‌ها و تعداد تسک‌هاش صفر می‌شه
+    const taskFolderList = taskFolders(ws);
     const tasks = app.vault.getMarkdownFiles().filter((f) => {
-      if (!f.path.startsWith(ws.tasksFolder)) return false;
+      if (!isUnderAnyFolder(f.path, taskFolderList)) return false;
       const cache = app.metadataCache.getFileCache(f);
       const fm = cache?.frontmatter;
       return fm?.type === "task" && fm?.project === `[[${projectSlug}]]`;

@@ -111,6 +111,7 @@ export class ProjectModal extends Modal {
         due: this.due,
       });
       new Notice(`Project saved: ${this.title}`);
+      await this.plugin.syncArchiveFor(this.ws, this.file);
     }
     this.plugin.refreshKanban();
     this.plugin.refreshProjectDashboard();

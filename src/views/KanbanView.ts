@@ -4,6 +4,7 @@ import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { statusColor, priorityColor, isMutedStatus, normalizeStatus } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
+import { isArchivedPath } from "../utils/WorkspacePaths";
 import { renderTimerBar, resetTimerWithConfirm, tickTimerDisplays } from "./TimerBar";
 
 export const KANBAN_VIEW_TYPE = "project-manager-kanban";
@@ -107,6 +108,7 @@ export class KanbanView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(taskPath) as TFile | null;
         if (!file) return;
         await updateFrontmatterFields(this.app, file, { status });
+        await this.plugin.syncArchiveFor(this.currentWorkspace, file);
         await this.render();
       });
     }
@@ -137,6 +139,13 @@ export class KanbanView extends ItemView {
     head.createDiv({ cls: "pm-card-title", text: fm.title ?? file.basename });
     const notes = this.noted.get(file.path);
     if (notes) renderNoteBadge(head, notes);
+    if (isArchivedPath(this.currentWorkspace, file.path)) {
+      head.createSpan({
+        cls: "pm-archived-badge",
+        text: "🗄",
+        attr: { "aria-label": "Archived — the file lives in the archive folder" },
+      });
+    }
     const prDot = head.createDiv({ cls: "pm-pr-dot" });
     prDot.style.setProperty("--pm-priority-color", priorityColor(fm.priority ?? "medium"));
     prDot.setAttribute("aria-label", `Priority: ${fm.priority ?? "medium"}`);

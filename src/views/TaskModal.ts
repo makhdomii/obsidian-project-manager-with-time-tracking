@@ -278,6 +278,7 @@ export class TaskModal extends Modal {
         due: this.due,
       });
       new Notice(`Task saved: ${this.title}`);
+      await this.plugin.syncArchiveFor(this.ws, this.file);
     }
     this.plugin.refreshTimerViews();
   }

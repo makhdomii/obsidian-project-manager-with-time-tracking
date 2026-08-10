@@ -5,6 +5,12 @@ export interface Workspace {
   projectsFolder: string;
   tasksFolder: string;
   timeEntriesFolder: string;
+  /**
+   * ریشه‌ی بایگانی. تسک/پروژه‌ای که وضعیتش بسته می‌شه با تایم‌انتری‌هاش به
+   * زیرپوشه‌های Tasks/Projects/TimeEntries همین‌جا منتقل می‌شه. خالی یعنی
+   * بایگانی خاموش. (workspaceهای قدیمی این کلید رو ندارن — موقع لود پر می‌شه.)
+   */
+  archiveFolder: string;
 }
 
 export interface ProjectManagerSettings {
@@ -24,6 +30,7 @@ export const DEFAULT_SETTINGS: ProjectManagerSettings = {
       projectsFolder: "ProjectManager/Projects",
       tasksFolder: "ProjectManager/Tasks",
       timeEntriesFolder: "ProjectManager/TimeEntries",
+      archiveFolder: "ProjectManager/Archive",
     },
   ],
   defaultWorkspaceId: "default",

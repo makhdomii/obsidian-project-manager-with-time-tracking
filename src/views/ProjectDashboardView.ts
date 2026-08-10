@@ -954,6 +954,7 @@ export class ProjectDashboardView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(projPath) as TFile | null;
         if (!file) return;
         await updateFrontmatterFields(this.app, file, { status });
+        await this.plugin.syncArchiveFor(this.currentWorkspace, file);
         this.plugin.refreshProjectDashboard();
         this.plugin.refreshKanban();
       });
@@ -982,6 +983,13 @@ export class ProjectDashboardView extends ItemView {
     header.createDiv({ cls: "pm-project-title", text: project.title });
     const notes = this.noted.get(project.file.path);
     if (notes) renderNoteBadge(header, notes);
+    if (project.archived) {
+      header.createSpan({
+        cls: "pm-archived-badge",
+        text: "🗄",
+        attr: { "aria-label": "Archived — the file lives in the archive folder" },
+      });
+    }
     const chip = header.createDiv({ cls: "pm-project-chip", text: project.status });
     chip.style.setProperty("--pm-status-color", statusColor(project.status));
 

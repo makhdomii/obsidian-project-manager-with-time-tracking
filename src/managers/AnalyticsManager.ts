@@ -9,6 +9,9 @@ import { App, TFile } from "obsidian";
 import { Workspace } from "../types";
 import { toISODate, todayISO, addDays, daysBetween } from "../utils/Jalali";
 import { normalizeStatus } from "../utils/StatusColors";
+import {
+  isArchivedPath, isUnderAnyFolder, projectFolders, taskFolders, timeEntryFolders,
+} from "../utils/WorkspacePaths";
 
 export interface TimeRecord {
   iso: string;          // روزِ محلی که این زمان روش ثبت شده
@@ -24,6 +27,8 @@ export interface TimeRecord {
 export interface TaskInfo {
   file: TFile;
   slug: string;
+  /** توی پوشه‌ی بایگانیه — همچنان توی گزارش‌ها هست، فقط جای فایلش فرق داره */
+  archived: boolean;
   title: string;
   status: string;
   priority: string;
@@ -37,6 +42,7 @@ export interface TaskInfo {
 export interface ProjectInfo {
   file: TFile;
   slug: string;
+  archived: boolean;
   title: string;
   status: string;
   priority: string;
@@ -125,13 +131,15 @@ export class AnalyticsManager {
   // ── تسک‌ها و پروژه‌ها ────────────────────────────────────────────────
   private collectTasks(ws: Workspace): TaskInfo[] {
     const out: TaskInfo[] = [];
+    const folders = taskFolders(ws);
     for (const file of this.app.vault.getMarkdownFiles()) {
-      if (!file.path.startsWith(`${ws.tasksFolder}/`)) continue;
+      if (!isUnderAnyFolder(file.path, folders)) continue;
       const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
       if (fm?.type !== "task" || unlink(fm.workspace) !== ws.name) continue;
       out.push({
         file,
         slug: file.basename,
+        archived: isArchivedPath(ws, file.path),
         title: String(fm.title ?? file.basename),
         status: normalizeStatus(fm.status ?? "todo"),
         priority: String(fm.priority ?? "medium"),
@@ -147,8 +155,9 @@ export class AnalyticsManager {
 
   private collectProjects(ws: Workspace, tasks: TaskInfo[]): ProjectInfo[] {
     const out: ProjectInfo[] = [];
+    const folders = projectFolders(ws);
     for (const file of this.app.vault.getMarkdownFiles()) {
-      if (!file.path.startsWith(`${ws.projectsFolder}/`)) continue;
+      if (!isUnderAnyFolder(file.path, folders)) continue;
       const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
       if (fm?.type !== "project" || unlink(fm.workspace) !== ws.name) continue;
 
@@ -157,6 +166,7 @@ export class AnalyticsManager {
       out.push({
         file,
         slug,
+        archived: isArchivedPath(ws, file.path),
         title: String(fm.title ?? file.basename),
         status: normalizeStatus(fm.status ?? "todo"),
         priority: String(fm.priority ?? "medium"),
@@ -173,8 +183,9 @@ export class AnalyticsManager {
   // ── منبع ۱: فایل‌های پوشه‌ی TimeEntries (فقط frontmatter، بدون خوندن فایل) ──
   private collectTimeEntryFiles(ws: Workspace, tasksBySlug: Map<string, TaskInfo>): TimeRecord[] {
     const out: TimeRecord[] = [];
+    const folders = timeEntryFolders(ws);
     for (const file of this.app.vault.getMarkdownFiles()) {
-      if (!file.path.startsWith(`${ws.timeEntriesFolder}/`)) continue;
+      if (!isUnderAnyFolder(file.path, folders)) continue;
       const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
       if (!fm || fm.hours === undefined) continue;
 

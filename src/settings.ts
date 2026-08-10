@@ -1,6 +1,7 @@
-import { App, PluginSettingTab, Setting, Modal, ButtonComponent } from "obsidian";
+import { App, PluginSettingTab, Setting, Modal, ButtonComponent, Notice } from "obsidian";
 import ProjectManagerPlugin from "./main";
 import { Workspace, DEFAULT_SETTINGS } from "./types";
+import { defaultArchiveFolder } from "./utils/WorkspacePaths";
 
 export class ProjectManagerSettingTab extends PluginSettingTab {
   plugin: ProjectManagerPlugin;
@@ -97,6 +98,39 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
           })
         );
 
+      new Setting(wsContainer)
+        .setName("Archive folder")
+        .setDesc(
+          "Tasks and projects that reach done / cancel / quite move here with their " +
+            "time entries, into Tasks / Projects / TimeEntries subfolders. They stay in " +
+            "the board and the reports — only the files move. Leave empty to turn archiving off."
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder(defaultArchiveFolder(ws.rootFolder))
+            .setValue(ws.archiveFolder ?? "")
+            .onChange(async (value) => {
+              this.plugin.settings.workspaces[index].archiveFolder = value.trim();
+              await this.plugin.saveSettings();
+            })
+        );
+
+      new Setting(wsContainer)
+        .setName("Tidy archive now")
+        .setDesc("Move everything already closed into the archive, and bring back anything reopened.")
+        .addButton((btn) =>
+          btn.setButtonText("Tidy archive").onClick(async () => {
+            const target = this.plugin.settings.workspaces[index];
+            await this.plugin.archiveManager.ensureArchiveFolders(target);
+            const r = await this.plugin.archiveManager.syncWorkspace(target);
+            new Notice(
+              r.moved || r.restored
+                ? `${r.moved} moved, ${r.restored} restored`
+                : "Already up to date"
+            );
+          })
+        );
+
       if (this.plugin.settings.workspaces.length > 1) {
         new Setting(wsContainer).addButton((btn) =>
           btn
@@ -125,6 +159,7 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
             projectsFolder: `${name}/Projects`,
             tasksFolder: `${name}/Tasks`,
             timeEntriesFolder: `${name}/TimeEntries`,
+            archiveFolder: defaultArchiveFolder(name),
           });
           await this.plugin.saveSettings();
           this.display();

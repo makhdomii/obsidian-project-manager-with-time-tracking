@@ -2,6 +2,7 @@ import { App, TFile, normalizePath } from "obsidian";
 import { Workspace, TaskFrontmatter } from "../types";
 import { slugify } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
+import { isUnderAnyFolder, taskFolders } from "../utils/WorkspacePaths";
 
 export class TaskManager {
   constructor(private app: App) {}
@@ -44,11 +45,13 @@ workspace: "[[${ws.name}]]"
     return file;
   }
 
+  /** شامل تسک‌های بایگانی‌شده هم می‌شه — وگرنه ستون done خالی می‌مونه */
   async getTasks(ws: Workspace): Promise<TFile[]> {
     const files = this.app.vault.getMarkdownFiles();
+    const folders = taskFolders(ws);
     const result: TFile[] = [];
     for (const file of files) {
-      if (!file.path.startsWith(ws.tasksFolder)) continue;
+      if (!isUnderAnyFolder(file.path, folders)) continue;
       const cache = this.app.metadataCache.getFileCache(file);
       if (cache?.frontmatter?.type === "task" && cache?.frontmatter?.workspace === `[[${ws.name}]]`) {
         result.push(file);
