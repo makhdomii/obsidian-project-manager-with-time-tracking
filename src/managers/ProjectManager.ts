@@ -40,7 +40,7 @@ workspace: "[[${ws.name}]]"
     return file;
   }
 
-  /** شامل پروژه‌های بایگانی‌شده هم می‌شه */
+  /** Includes archived projects */
   async getProjects(ws: Workspace): Promise<TFile[]> {
     const files = this.app.vault.getMarkdownFiles();
     const folders = projectFolders(ws);
@@ -56,12 +56,12 @@ workspace: "[[${ws.name}]]"
   }
 
   async updateProjectStats(app: App, ws: Workspace, projectSlug: string): Promise<void> {
-    // پروژه ممکنه بایگانی شده باشه، پس با مسیرِ ثابت پیداش نمی‌کنیم
+    // The project may be archived, so a fixed path will not find it
     const projectFile = (await this.getProjects(ws)).find((f) => f.basename === projectSlug);
     if (!projectFile) return;
 
-    // تسک‌های بایگانی‌شده هم باید شمرده بشن، وگرنه به محضِ بسته‌شدنِ پروژه
-    // ساعت‌ها و تعداد تسک‌هاش صفر می‌شه
+    // Archived tasks have to count too, or a project's hours and task count drop
+    // to zero the moment it closes
     const taskFolderList = taskFolders(ws);
     const tasks = app.vault.getMarkdownFiles().filter((f) => {
       if (!isUnderAnyFolder(f.path, taskFolderList)) return false;

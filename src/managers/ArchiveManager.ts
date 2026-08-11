@@ -7,7 +7,7 @@ import {
   isArchivedPath, projectFolders, taskFolders, timeEntryFolders,
 } from "../utils/WorkspacePaths";
 
-/** وضعیت‌های بسته — این‌ها می‌رن بایگانی */
+/** Closed statuses — these are the ones that get archived */
 const CLOSED = new Set(["done", "cancel", "quite"]);
 
 export function isArchivableStatus(status: unknown): boolean {
@@ -22,11 +22,11 @@ export interface ArchiveResult {
 export class ArchiveManager {
   constructor(private app: App, private workspaceManager: WorkspaceManager) {}
 
-  // ── همگام‌سازی یک تسک ─────────────────────────────────────────────────
+  // ── Syncing one task ────────────────────────────────────────────────
 
   /**
-   * تسک رو بر اساس وضعیتش سر جای درست می‌بره و تایم‌انتری‌هاش رو هم با خودش
-   * می‌بره. برگردوندن هم همینه: وضعیت که به todo/active برگرده، فایل برمی‌گرده.
+   * Moves a task to wherever its status says it belongs, taking its time entries
+   * along. Restoring is the same trip: set the status back to todo or active.
    */
   async syncTask(ws: Workspace, file: TFile): Promise<ArchiveResult> {
     if (!archiveEnabled(ws)) return { moved: 0, restored: 0 };
@@ -48,15 +48,15 @@ export class ArchiveManager {
       : { moved: 0, restored: 1 + entries };
   }
 
-  // ── همگام‌سازی یک پروژه (آبشاری) ──────────────────────────────────────
+  // ── Syncing a project, which cascades ───────────────────────────────
 
   /**
-   * پروژه که بسته بشه، تسک‌هاش و تایم‌انتری‌هاشون هم می‌رن — تا لازم نباشه
-   * دستی دنبالشون بگردی.
+   * When a project closes its tasks and their time entries go too, so nothing
+   * has to be chased down by hand.
    *
-   * موقع برگردوندن اما فقط تسک‌هایی برمی‌گردن که وضعیت خودشون باز باشه؛ تسکی
-   * که مستقلاً done است توی بایگانی می‌مونه، چون بایگانی‌بودنش ربطی به پروژه
-   * نداشته.
+   * Restoring only brings back tasks that are themselves open. A task that is
+   * done in its own right stays archived, because its archiving was never the
+   * project's doing.
    */
   async syncProject(ws: Workspace, file: TFile): Promise<ArchiveResult> {
     if (!archiveEnabled(ws)) return { moved: 0, restored: 0 };
@@ -68,7 +68,7 @@ export class ArchiveManager {
     const slug = file.basename;
     const result: ArchiveResult = { moved: 0, restored: 0 };
 
-    // ۱) خودِ پروژه
+    // 1) the project itself
     if (shouldArchive !== isArchivedPath(ws, file.path)) {
       const target = shouldArchive ? archiveProjectsFolder(ws) : normalizePath(ws.projectsFolder);
       await this.moveFile(file, target);
@@ -76,10 +76,10 @@ export class ArchiveManager {
       else result.restored++;
     }
 
-    // ۲) تسک‌های همین پروژه
+    // 2) the tasks belonging to it
     for (const task of this.tasksOfProject(ws, slug)) {
       const taskFm = this.app.metadataCache.getFileCache(task)?.frontmatter;
-      // برگردوندن فقط برای تسک‌های باز
+      // Only open tasks come back
       const taskShouldArchive = shouldArchive || isArchivableStatus(taskFm?.status);
       if (taskShouldArchive === isArchivedPath(ws, task.path)) continue;
 
@@ -94,11 +94,11 @@ export class ArchiveManager {
     return result;
   }
 
-  // ── عملیات دسته‌ای ────────────────────────────────────────────────────
+  // ── Bulk operations ─────────────────────────────────────────────────
 
   /**
-   * کل workspace رو مرتب می‌کنه: هرچی بسته‌ست می‌ره بایگانی، هرچی باز شده
-   * برمی‌گرده. برای آیتم‌های موجود که قبل از روشن‌شدنِ بایگانی بسته شدن.
+   * Tidies a whole workspace: everything closed goes to the archive, everything
+   * reopened comes back. For items that closed before archiving existed.
    */
   async syncWorkspace(ws: Workspace): Promise<ArchiveResult> {
     if (!archiveEnabled(ws)) return { moved: 0, restored: 0 };
@@ -106,14 +106,14 @@ export class ArchiveManager {
 
     const total: ArchiveResult = { moved: 0, restored: 0 };
 
-    // اول پروژه‌ها (آبشارشون تسک‌ها رو هم جابه‌جا می‌کنه)
+    // Projects first, since their cascade moves tasks as well
     for (const file of this.filesIn(projectFolders(ws), "project", ws)) {
       const r = await this.syncProject(ws, file);
       total.moved += r.moved;
       total.restored += r.restored;
     }
 
-    // بعد تسک‌های باقی‌مانده (بدون پروژه یا پروژه‌ی باز)
+    // Then whatever tasks are left, with no project or an open one
     for (const file of this.filesIn(taskFolders(ws), "task", ws)) {
       const r = await this.syncTask(ws, file);
       total.moved += r.moved;
@@ -131,7 +131,7 @@ export class ArchiveManager {
     await this.workspaceManager.ensureFolder(archiveTimeEntriesFolder(ws));
   }
 
-  // ── کمکی‌ها ───────────────────────────────────────────────────────────
+  // ── Helpers ─────────────────────────────────────────────────────────
 
   private filesIn(folders: string[], type: string, ws: Workspace): TFile[] {
     const out: TFile[] = [];
@@ -154,7 +154,7 @@ export class ArchiveManager {
     });
   }
 
-  /** تایم‌انتری‌های یک تسک رو به بایگانی می‌بره یا برمی‌گردونه */
+  /** Moves a task's time entries into the archive, or back out */
   private async moveTimeEntriesFor(
     ws: Workspace,
     taskSlug: string,
@@ -181,8 +181,8 @@ export class ArchiveManager {
   }
 
   /**
-   * جابه‌جایی با fileManager.renameFile انجام می‌شه نه vault.rename، چون
-   * لینک‌های [[...]] توی بقیه‌ی نوت‌ها رو هم به‌روز می‌کنه.
+   * Moves go through fileManager.renameFile rather than vault.rename, because
+   * that also updates [[...]] links in every other note.
    */
   private async moveFile(file: TFile, targetFolder: string): Promise<void> {
     await this.workspaceManager.ensureFolder(targetFolder);

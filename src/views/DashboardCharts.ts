@@ -1,8 +1,8 @@
 // ╔══════════════════════════════════════════════════════════════════════╗
-// ║  DashboardCharts — قطعه‌های تصویریِ داشبورد                            ║
-// ║  هر چارت اینجا سه قانون رو رعایت می‌کنه: رنگ فقط از توکن‌های           ║
-// ║  اعتبارسنجی‌شده‌ی pm-cat/pm-heat میاد، هر چارت نسخه‌ی جدولی داره        ║
-// ║  (برای وقتی رنگ کافی نیست)، و تولتیپ هیچ‌وقت تنها راهِ دیدن عدد نیست.  ║
+// ║  DashboardCharts — the dashboard's visual pieces                     ║
+// ║  Every chart here keeps three rules: colour only from the validated  ║
+// ║  pm-cat/pm-heat tokens, a table view for when colour is not enough,  ║
+// ║  and a tooltip is never the only way to read a number.               ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 import {
@@ -11,7 +11,7 @@ import {
   weekdayCol, weekdayLabel,
 } from "../utils/Jalali";
 
-// ── قالب‌بندی عدد ────────────────────────────────────────────────────────
+// ── Number formatting ───────────────────────────────────────────────────
 
 export function formatHours(h: number): string {
   const totalMin = Math.round((h || 0) * 60);
@@ -27,8 +27,8 @@ export function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
 }
 
-// ── تولتیپ مشترک ─────────────────────────────────────────────────────────
-// تولتیپ فقط «تکمیل‌کننده»‌ست؛ همون عددها توی نمای جدولیِ هر کارت هم هستن.
+// ── Shared tooltip ──────────────────────────────────────────────────────
+// The tooltip only ever supplements; the same numbers sit in each card's table view.
 
 export class ChartTooltip {
   private el: HTMLElement;
@@ -38,7 +38,7 @@ export class ChartTooltip {
     this.el.style.display = "none";
   }
 
-  /** تولتیپ رو به یک مارک وصل می‌کنه — هم با ماوس، هم با فوکوس کیبورد */
+  /** Attaches the tooltip to a mark — for the mouse and for keyboard focus alike */
   attach(mark: HTMLElement, lines: () => string[]): void {
     const show = () => this.show(mark, lines());
     mark.addEventListener("mouseenter", show);
@@ -73,12 +73,12 @@ export class ChartTooltip {
   hide(): void { this.el.style.display = "none"; }
 }
 
-// ── کارت چارت + کلید نمای جدولی ──────────────────────────────────────────
+// ── Chart card and the table-view toggle ────────────────────────────────
 
 export interface ChartCard {
   root: HTMLElement;
   body: HTMLElement;
-  /** جدولِ معادلِ همین چارت — با کلید «Table» جای چارت رو می‌گیره */
+  /** The table equivalent of this chart — the Table toggle swaps it in */
   setTable(columns: string[], rows: (string | number)[][]): void;
 }
 
@@ -122,14 +122,14 @@ export function chartCard(parent: HTMLElement, title: string, subtitle?: string)
   };
 }
 
-// ── عدد قهرمان و کاشی‌های آماری ──────────────────────────────────────────
+// ── Hero figure and stat tiles ──────────────────────────────────────────
 
 export interface StatTileOptions {
   label: string;
   value: string;
   unit?: string;
   sub?: string;
-  /** مثبت/منفی نسبت به دوره‌ی قبل — جهت رنگ رو تعیین می‌کنه */
+  /** Up or down against the previous period — decides the colour direction */
   delta?: { text: string; direction: "up" | "down" | "flat" };
   tone?: "default" | "warn" | "critical";
 }
@@ -158,7 +158,7 @@ export function statTile(parent: HTMLElement, opts: StatTileOptions): HTMLElemen
   return el;
 }
 
-// ── چارت ستونی: یک سری، پس بدون لجند (عنوان کارت خودش گویاست) ────────────
+// ── Column chart: one series, so no legend (the card title says it) ─────
 
 export interface ColumnPoint {
   key: string;
@@ -188,14 +188,14 @@ export function columnChart(
   });
 
   const cols = area.createDiv({ cls: "pm-db-cols" });
-  // فاصله‌ی برچسب‌های محور x طوری انتخاب می‌شه که روی هم نیفتن
+  // x-axis label spacing is chosen so labels cannot collide
   const step = Math.max(1, Math.ceil(points.length / 12));
 
   points.forEach((p, i) => {
     const col = cols.createDiv({ cls: "pm-db-col" });
     const bar = col.createDiv({ cls: "pm-db-bar" });
     if (p.value <= 0) {
-      // روزِ بدون ثبت هم یک رد نازک می‌ذاره تا ستون خالی با «داده‌ی نداشته» اشتباه نشه
+      // A day with nothing logged still leaves a thin trace, so an empty column is
       bar.addClass("pm-db-bar-zero");
       bar.style.height = "2px";
     } else {
@@ -214,8 +214,8 @@ export function columnChart(
   });
 }
 
-/** سقف محور رو به نزدیک‌ترین عددِ گردِ بالاتر می‌بره — پله‌ها ریزن تا یک روزِ
- *  ۶ ساعته محور رو تا ۱۰ نکشه و نصف ارتفاعِ چارت هدر نره */
+/** Rounds the axis ceiling up to the next tidy number — the steps are small so a
+ *  six-hour day does not stretch the axis to 10 and waste half the height */
 const NICE_STEPS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 
 function niceCeil(v: number): number {
@@ -226,7 +226,7 @@ function niceCeil(v: number): number {
   return stepped * mag;
 }
 
-// ── چارت میله‌ای افقی: یک سری، رنگِ اسلات ۱، عدد سرِ میله ─────────────────
+// ── Horizontal bars: one series, slot 1 colour, value at the bar's end ──
 
 export interface BarRow {
   label: string;
@@ -259,7 +259,7 @@ export function barListChart(parent: HTMLElement, rows: BarRow[], tooltip: Chart
   }
 }
 
-// ── میله‌ی انباشته + لجند (لجند همیشه هست، چون بیش از یک سری داریم) ───────
+// ── Stacked bar and legend (always a legend, since there is >1 series) ──
 
 export interface StackSegment {
   label: string;
@@ -285,7 +285,7 @@ export function stackedBar(parent: HTMLElement, segments: StackSegment[], toolti
     }
   }
 
-  // برچسب داخل قطعه نمی‌ذاریم (قطعه‌های کوچک متن رو می‌برن) — لجند حاملِ هویته
+  // No labels inside segments — small ones would clip — the legend carries identity
   const legend = wrap.createDiv({ cls: "pm-db-legend" });
   for (const seg of segments) {
     const item = legend.createDiv({ cls: "pm-db-legitem" });
@@ -296,14 +296,14 @@ export function stackedBar(parent: HTMLElement, segments: StackSegment[], toolti
   }
 }
 
-// ── تقویم شمسی ───────────────────────────────────────────────────────────
-// سه حالت، دقیقاً مثل HabitCalendar والت: هفتگی (dots)، ماهانه/فصلی (grid)،
-// سالانه (heatmap). رنگ = شدت، از رمپ تک‌رنگِ pm-heat.
+// ── Jalali calendar ─────────────────────────────────────────────────────
+// Three modes, exactly like the vault's HabitCalendar: weekly (dots), monthly and
+// seasonal (grid), yearly (heatmap). Colour is intensity, from the pm-heat ramp.
 
 export type CalendarMode = "dots" | "grid" | "heatmap";
 
-/** آستانه‌های ثابت به ساعت — عمداً وابسته به max بازه نیستن تا رنگ یک روز
- *  با عوض‌شدن فیلتر تغییر نکنه. */
+/** Fixed thresholds in hours — deliberately not tied to the range max, so a day's
+ *  colour does not shift when a filter changes. */
 const HEAT_STOPS = [1, 2.5, 4, 6];
 
 export function heatBin(hours: number): number {
@@ -365,7 +365,7 @@ function renderCalGrid(wrap: HTMLElement, opts: CalendarOptions): void {
 
     const grid = section.createDiv({ cls: "pm-db-calgrid" });
     const startCol = jalaliFirstWeekdayCol(group.jy, group.jm);
-    // اگر بازه از وسط ماه شروع شده، فقط تا اولین روزِ موجود جلو می‌ریم
+    // If the range starts mid-month, only run up to the first day present
     const firstJd = isoToJalali(group.isos[0]).jd;
     const lead = (startCol + firstJd - 1) % 7;
     for (let i = 0; i < lead; i++) grid.createDiv({ cls: "pm-db-calcell is-empty" });
@@ -396,7 +396,7 @@ function renderCalHeatmap(wrap: HTMLElement, opts: CalendarOptions): void {
   }
 }
 
-/** راهنمای مقیاسِ رمپ — برای رمزگذاری پیوسته اجباریه */
+/** The ramp's scale legend — mandatory for a continuous encoding */
 export function heatLegend(parent: HTMLElement): void {
   const legend = parent.createDiv({ cls: "pm-db-heatlegend" });
   legend.createSpan({ cls: "pm-db-heatlabel", text: "Less" });

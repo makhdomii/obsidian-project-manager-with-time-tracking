@@ -1,14 +1,15 @@
 // ╔══════════════════════════════════════════════════════════════════════╗
-// ║  NoteContent — «این نوت چیزی جز تمپلیت داره؟»                         ║
-// ║  تمپلیتِ تسک/پروژه فقط اینه: frontmatter، یک H1 با عنوان، و (برای     ║
-// ║  تسک) سرتیتر «Time Log» با جدولش. هر چیز دیگه‌ای یادداشتِ خودِ کاربره. ║
+// ║  NoteContent — "does this note hold anything beyond the template?"   ║
+// ║  The task/project template is only frontmatter, an H1 title, and     ║
+// ║  for a task a Time Log heading with its table. Anything beyond       ║
+// ║  that is the user's own note.                                        ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 import { App, TFile } from "obsidian";
 
 export interface NoteInfo {
   hasNotes: boolean;
-  /** چند خط اولِ یادداشت — توی تولتیپ نشون داده می‌شه تا لازم نباشه نوت باز بشه */
+  /** First few lines of the note — shown in a tooltip so it need not be opened */
   excerpt: string;
 }
 
@@ -29,15 +30,15 @@ export function readBodyNotes(content: string): NoteInfo {
   for (const raw of stripFrontmatter(content).split("\n")) {
     const line = raw.trim();
     if (!line) continue;
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) continue; // خط جداکننده، محتوا حساب نمی‌شه
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) continue; // a rule, not content
 
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       const text = heading[2].trim();
-      // سرتیتر Time Log و جدولِ زیرش بخشی از تمپلیتن
+      // The Time Log heading and the table under it are part of the template
       if (/^time log$/i.test(text)) { inTimeLog = true; continue; }
-      // اولین H1 عنوانِ خودِ نوته. عمداً به «اولین خط» گره نخورده، چون بعضی
-      // نوت‌ها یادداشت رو بالای عنوان می‌نویسن.
+      // The first H1 is the note's own title. Deliberately not tied to "first line",
+      // because some notes put their jottings above the title.
       if (!seenTitle && heading[1].length === 1) { seenTitle = true; inTimeLog = false; continue; }
       found.push(text);
       if (found.length >= EXCERPT_LINES) break;
@@ -57,7 +58,7 @@ export function readBodyNotes(content: string): NoteInfo {
   return { hasNotes: true, excerpt };
 }
 
-/** خوندن فایل گرونه، پس نتیجه بر اساس mtime کش می‌شه */
+/** Reading a file is expensive, so results are cached on mtime */
 export class NoteScanner {
   private cache = new Map<string, { mtime: number; info: NoteInfo }>();
 
@@ -71,13 +72,13 @@ export class NoteScanner {
     try {
       info = readBodyNotes(await this.app.vault.cachedRead(file));
     } catch {
-      // فایل پاک/قفل شده — نبودِ نشانگر بهتر از ترکیدنِ رندره
+      // File deleted or locked — a missing marker beats a broken render
     }
     this.cache.set(file.path, { mtime: file.stat.mtime, info });
     return info;
   }
 
-  /** فقط فایل‌هایی که یادداشت دارن برمی‌گردن */
+  /** Only files that actually carry notes come back */
   async scan(files: TFile[]): Promise<Map<string, NoteInfo>> {
     const out = new Map<string, NoteInfo>();
     for (const file of files) {
@@ -88,7 +89,7 @@ export class NoteScanner {
   }
 }
 
-/** نشانگر روی کارت — یک جای ثابت، تا اسکنِ ستون با یک نگاه ممکن باشه */
+/** Card marker — one fixed spot, so a column can be scanned at a glance */
 export function renderNoteBadge(parent: HTMLElement, info: NoteInfo): HTMLElement {
   const badge = parent.createSpan({ cls: "pm-note-badge", text: "📝" });
   badge.setAttribute("title", info.excerpt);

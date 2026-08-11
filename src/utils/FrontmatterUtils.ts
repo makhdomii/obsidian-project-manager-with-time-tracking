@@ -29,11 +29,11 @@ export async function updateFrontmatterFields(
 }
 
 /**
- * یک مقدار رو به‌شکلِ رشته‌ی نقل‌قول‌شده‌ی YAML درمی‌آره.
+ * Renders a value as a quoted YAML string.
  *
- * عنوان‌ها قبلاً مستقیم داخل "..." تزریق می‌شدن؛ یک کوتیشن توی عنوان کافی بود
- * تا کلِ frontmatter خراب بشه — که برای عنوان‌هایی که از بیرون میان (مثلاً
- * کارت‌های Codecks) اصلاً بعید نیست.
+ * Titles used to be injected straight into "...", where a single quote in the
+ * title was enough to break the whole frontmatter — hardly unlikely for titles
+ * arriving from outside, such as Codecks cards.
  */
 export function yamlString(value: string): string {
   return `"${String(value ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r?\n/g, " ")}"`;

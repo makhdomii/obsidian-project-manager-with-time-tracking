@@ -26,10 +26,10 @@ export default class ProjectManagerPlugin extends Plugin {
   analytics: AnalyticsManager;
   noteScanner: NoteScanner;
   archiveManager: ArchiveManager;
-  /** سطحِ عمومی برای پلاگین‌های دیگه — نگاه کن به src/api.ts */
+  /** Public surface for other plugins — see src/api.ts */
   api: ProjectManagerApi;
   private styleEl: HTMLStyleElement | null = null;
-  /** تایمرِ خام از data.json — تا وقتی timeTracker ساخته بشه نگهش می‌داریم */
+  /** Raw timer from data.json — held until timeTracker has been constructed */
   private persistedTimer: unknown = null;
 
   async onload(): Promise<void> {
@@ -177,15 +177,15 @@ export default class ProjectManagerPlugin extends Plugin {
 
   async onunload(): Promise<void> {
     this.app.workspace.detachLeavesOfType(KANBAN_VIEW_TYPE);
-    // تگ استایل باید با پلاگین بره، وگرنه لود بعدی روش می‌افته
+    // The style tag must go with the plugin, or the next load stacks on top of it
     this.styleEl?.remove();
     this.styleEl = null;
   }
 
   /**
-   * data.json هم تنظیمات رو نگه می‌داره هم تایمرِ فعال رو. تنظیمات مثل قبل
-   * top-level می‌مونن (تا فایل‌های موجود بدون مهاجرت کار کنن) و تایمر کنارشون
-   * زیر کلید activeTimer می‌شینه.
+   * data.json holds both the settings and the active timer. Settings stay
+   * top-level as before, so existing files work without migration, and the timer
+   * sits beside them under the activeTimer key.
    */
   async loadSettings(): Promise<void> {
     const data = ((await this.loadData()) ?? {}) as Record<string, unknown>;
@@ -193,13 +193,13 @@ export default class ProjectManagerPlugin extends Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, settings);
     this.persistedTimer = activeTimer ?? null;
 
-    // workspaceهایی که قبل از اضافه‌شدنِ بایگانی ساخته شدن این کلید رو ندارن
+    // Workspaces created before archiving existed do not carry this key
     for (const ws of this.settings.workspaces) {
       if (!ws.archiveFolder) ws.archiveFolder = defaultArchiveFolder(ws.rootFolder);
     }
   }
 
-  /** تنها نویسنده‌ی data.json — تنظیمات و تایمر همیشه با هم نوشته می‌شن */
+  /** The only writer of data.json — settings and timer always go out together */
   async savePluginData(): Promise<void> {
     await this.saveData({ ...this.settings, activeTimer: this.timeTracker.serialize() });
   }
@@ -209,12 +209,12 @@ export default class ProjectManagerPlugin extends Plugin {
   }
 
   /**
-   * نام‌های قدیمیِ status رو توی تنظیمات یک‌بار برای همیشه عوض می‌کنه.
+   * Renames the old status names in settings, once and for good.
    *
-   * لازمه چون تنظیماتِ ذخیره‌شده روی DEFAULT_SETTINGS می‌شینه: بدون این،
-   * data.json تا ابد "not started" رو نگه می‌داره و ستون‌های تخته با نوت‌های
-   * مهاجرت‌کرده جور درنمیان — یعنی تسک‌ها اصلاً رسم نمی‌شن. اینجا نام قدیمی
-   * *جایگزین* می‌شه، نه پشتیبانی.
+   * Needed because stored settings land on top of DEFAULT_SETTINGS: without it,
+   * data.json keeps "not started" forever and the board columns stop matching the
+   * migrated notes — meaning no task is drawn at all. The old name is *replaced*
+   * here, not supported alongside.
    */
   private async migrateStatusNames(): Promise<void> {
     const RENAMES: Record<string, string> = {
@@ -232,7 +232,7 @@ export default class ProjectManagerPlugin extends Plugin {
     }
   }
 
-  /** تایمرِ ذخیره‌شده رو برمی‌گردونه و به کاربر خبر می‌ده چقدر شمرده */
+  /** Restores the saved timer and tells the user how long it thinks it has run */
   private restoreTimer(): void {
     if (!this.timeTracker.restore(this.persistedTimer)) return;
     const t = this.timeTracker.getActiveTimer();
@@ -297,11 +297,11 @@ export default class ProjectManagerPlugin extends Plugin {
   }
 
   /**
-   * بعد از هر تغییرِ وضعیت صدا زده می‌شه: فایل رو (و اگه پروژه‌ست، تسک‌ها و
-   * تایم‌انتری‌هاش رو) می‌بره بایگانی یا برمی‌گردونه.
+   * Called after any status change: moves the file — and for a project its tasks
+   * and their time entries — into the archive, or back out of it.
    *
-   * متادیتاکش اوبسیدین بعد از نوشتنِ frontmatter با تأخیر به‌روز می‌شه، پس
-   * صبر می‌کنیم تا وضعیتِ تازه رو ببینیم نه قدیمی رو.
+   * Obsidian's metadata cache updates a beat after frontmatter is written, so we
+   * wait to read the new status rather than the old one.
    */
   async syncArchiveFor(ws: Workspace, file: TFile): Promise<void> {
     await this.nextMetadataTick(file);
@@ -310,7 +310,7 @@ export default class ProjectManagerPlugin extends Plugin {
     else if (type === "task") await this.archiveManager.syncTask(ws, file);
   }
 
-  /** تا وقتی کشِ متادیتا برای این فایل تازه بشه (با سقفِ زمانی) */
+  /** Waits for this file's metadata cache to refresh, with a time limit */
   private nextMetadataTick(file: TFile): Promise<void> {
     return new Promise((resolve) => {
       let done = false;
@@ -327,7 +327,7 @@ export default class ProjectManagerPlugin extends Plugin {
     });
   }
 
-  /** بعد از هر تغییرِ وضعیتِ تایمر هر دو نما باید نو بشن، نه فقط کانبان */
+  /** After any timer state change both views need refreshing, not just the kanban */
   refreshTimerViews(): void {
     this.refreshKanban();
     this.refreshProjectDashboard();
@@ -342,9 +342,9 @@ export default class ProjectManagerPlugin extends Plugin {
 
   loadStyles(): void {
     const styleId = "pm-styles";
-    // قبلاً اگه تگ استایل از قبل بود، همین‌جا return می‌کرد — یعنی بعد از هر
-    // آپدیت یا reload پلاگین، استایلِ نسخه‌ی قبلی می‌موند و قواعد جدید هیچ‌وقت
-    // اعمال نمی‌شد. حالا محتوا همیشه بازنویسی می‌شه.
+    // This used to return early when the style tag already existed, which meant
+    // that after any update or reload the previous version's stylesheet stayed and
+    // new rules never applied. The content is now always rewritten.
     let style = document.getElementById(styleId) as HTMLStyleElement | null;
     if (!style) {
       style = document.createElement("style");
@@ -432,7 +432,7 @@ export default class ProjectManagerPlugin extends Plugin {
 }
 .pm-timer-bar .pm-btn { padding: 2px 9px; font-size: 11.5px; }
 
-/* پازشده: رنگ‌ها خنثی می‌شن و نبضِ نقطه می‌ایسته، تا یک نگاه کافی باشه */
+/* Paused: colours go neutral and the dot stops pulsing, so a glance is enough */
 .pm-timer-bar.paused {
   background: var(--background-secondary);
   border-color: var(--background-modifier-border);
@@ -464,7 +464,7 @@ export default class ProjectManagerPlugin extends Plugin {
 }
 .pm-confirm .pm-modal-btns { justify-content: flex-end; }
 
-/* آیتمِ بایگانی‌شده — هنوز روی تخته هست، فقط فایلش جای دیگه‌ست */
+/* An archived item — still on the board, only its file lives elsewhere */
 .pm-archived-badge {
   font-size: 10px;
   line-height: 1;
@@ -473,9 +473,9 @@ export default class ProjectManagerPlugin extends Plugin {
   cursor: default;
 }
 
-/* ستون‌ها هم‌قد تخته‌ان و خودشان اسکرول می‌شن. قبلاً align-items: flex-start
-   بود و هر ستون تا اندازه‌ی محتواش کش می‌اومد، یعنی یک ستونِ done با ۲۰ کارت
-   کلِ صفحه رو بلند می‌کرد و برای دیدن بقیه‌ی ستون‌ها باید اسکرول می‌کردی. */
+/* Columns match the board height and scroll themselves. This used to be
+   align-items: flex-start, so every column grew to fit its contents: one done
+   column with 20 cards made the whole page tall and buried the other columns. */
 .pm-kanban-board {
   display: flex;
   gap: 14px;
@@ -516,7 +516,7 @@ export default class ProjectManagerPlugin extends Plugin {
   font-weight: 700;
   font-size: 12px;
   color: var(--text-normal);
-  /* statusها عمداً lowercase نوشته می‌شن — همون‌طور نشونشون بده */
+  /* Statuses are written lowercase on purpose — show them that way */
   text-transform: none;
   display: flex;
   align-items: center;
@@ -553,7 +553,7 @@ export default class ProjectManagerPlugin extends Plugin {
   min-height: 0;
   scrollbar-width: thin;
 }
-/* اسکرول‌بارِ ستون فقط وقتی موس روش هست دیده بشه — پنج‌تا نوارِ همیشگی شلوغه */
+/* A column scrollbar only shows on hover — five permanent bars is noise */
 .pm-col-cards::-webkit-scrollbar { width: 8px; }
 .pm-col-cards::-webkit-scrollbar-thumb {
   background: transparent;
@@ -693,8 +693,8 @@ export default class ProjectManagerPlugin extends Plugin {
   margin-bottom: 5px;
   letter-spacing: 0.02em;
 }
-/* اولویت یک مقیاس شدت مرتبه، پس از پالت وضعیت (good→critical) رنگ می‌گیره،
-   نه از اسلات‌های دسته‌ای — و همیشه با متنِ خوانا کنارش، نه رنگِ تنها. */
+/* Priority is an ordered intensity scale, so it takes colour from the status
+   palette (good→critical) rather than categorical slots, always with a label. */
 .pm-priority-low { background: color-mix(in srgb, var(--pm-status-good) 18%, transparent); color: var(--pm-status-good); }
 .pm-priority-medium { background: color-mix(in srgb, var(--pm-status-warning) 20%, transparent); color: var(--text-normal); }
 .pm-priority-high { background: color-mix(in srgb, var(--pm-status-serious) 20%, transparent); color: var(--text-normal); }
@@ -723,12 +723,12 @@ export default class ProjectManagerPlugin extends Plugin {
   font-weight: 600;
   color: var(--text-normal);
   line-height: 1.4;
-  /* عنوان فضا رو پر می‌کنه تا نشانگرِ یادداشت و نقطه‌ی اولویت بچسبن به راست */
+  /* The title takes the space so the note marker and priority dot sit right */
   flex: 1;
   min-width: 0;
 }
-/* نشانگر «این نوت یادداشت داره» — همیشه کنار عنوان، تا اسکن ستون با یک نگاه
-   ممکن باشه. تولتیپش چند خط اولِ یادداشت رو نشون می‌ده. */
+/* The "this note has notes" marker — always beside the title so a column can be
+   scanned at a glance. Its tooltip shows the first few lines of the note. */
 .pm-note-badge {
   font-size: 11px;
   line-height: 1;

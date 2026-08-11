@@ -8,8 +8,8 @@ export class TaskManager {
   constructor(private app: App) {}
 
   /**
-   * @param extra فیلدهای اضافیِ frontmatter — مثلاً شناسه‌ی منبعِ بیرونی، تا
-   *              وارد‌کننده‌ها بتونن تشخیص بدن این تسک قبلاً ساخته شده
+   * @param extra additional frontmatter fields — an external source id, say, so
+   *              that importers can tell this task has already been created
    */
   async createTask(
     ws: Workspace,
@@ -54,8 +54,8 @@ ${extraLines}---
   }
 
   /**
-   * دو تسکِ متفاوت می‌تونن عنوانِ یکسان داشته باشن (مخصوصاً وقتی دسته‌ای وارد
-   * می‌شن). قبلاً vault.create توی این حالت خطا می‌داد.
+   * Two different tasks can share a title, especially when imported in bulk.
+   * vault.create used to throw in that case.
    */
   private async uniqueTaskPath(ws: Workspace, slug: string): Promise<string> {
     const base = slug || "task";
@@ -68,7 +68,7 @@ ${extraLines}---
     return path;
   }
 
-  /** شامل تسک‌های بایگانی‌شده هم می‌شه — وگرنه ستون done خالی می‌مونه */
+  /** Includes archived tasks — otherwise the done column comes up empty */
   async getTasks(ws: Workspace): Promise<TFile[]> {
     const files = this.app.vault.getMarkdownFiles();
     const folders = taskFolders(ws);

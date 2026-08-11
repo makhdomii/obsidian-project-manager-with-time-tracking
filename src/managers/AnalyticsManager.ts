@@ -1,8 +1,8 @@
 // ╔══════════════════════════════════════════════════════════════════════╗
-// ║  AnalyticsManager — همه‌ی داده‌ی خامِ داشبورد از این‌جا میاد            ║
-// ║  منبع اصلیِ زمان‌ها پوشه‌ی TimeEntries ـه؛ ردیف‌های جدول «Time Log»    ║
-// ║  داخل خود تسک‌ها هم خونده می‌شن (برای تسک‌های قدیمی) و با کلید         ║
-// ║  task|start|end دیدوپلیکیت می‌شن تا هیچ ساعتی دوبار حساب نشه.         ║
+// ║  AnalyticsManager — where every bit of the dashboard's raw data starts║
+// ║  Time comes chiefly from the TimeEntries folder; the Time Log table  ║
+// ║  rows inside older tasks are read too, and both are deduplicated on  ║
+// ║  task|start|end so that no hour is ever counted twice.               ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 import { App, TFile } from "obsidian";
@@ -14,7 +14,7 @@ import {
 } from "../utils/WorkspacePaths";
 
 export interface TimeRecord {
-  iso: string;          // روزِ محلی که این زمان روش ثبت شده
+  iso: string;          // the local day this time was logged against
   hours: number;
   taskSlug: string;
   taskTitle: string;
@@ -27,7 +27,7 @@ export interface TimeRecord {
 export interface TaskInfo {
   file: TFile;
   slug: string;
-  /** توی پوشه‌ی بایگانیه — همچنان توی گزارش‌ها هست، فقط جای فایلش فرق داره */
+  /** In the archive folder — still in the reports, only the file moved */
   archived: boolean;
   title: string;
   status: string;
@@ -59,7 +59,7 @@ export interface AnalyticsData {
   projects: ProjectInfo[];
   tasksBySlug: Map<string, TaskInfo>;
   projectsBySlug: Map<string, ProjectInfo>;
-  /** iso → رکوردهای همون روز، مرتب‌شده بر اساس ساعت (نزولی) */
+  /** iso → that day's records, sorted by hours descending */
   byDay: Map<string, TimeRecord[]>;
   firstISO: string | null;
   lastISO: string | null;
@@ -76,7 +76,7 @@ function unlink(value: unknown): string {
 }
 
 export class AnalyticsManager {
-  // پارس جدول‌های Time Log گرون‌تره (لازمه فایل خونده بشه) — پس بر اساس mtime کش می‌شه
+  // Parsing Time Log tables costs a file read, so results are cached on mtime
   private tableCache = new Map<string, { mtime: number; rows: TimeRecord[] }>();
 
   constructor(private app: App) {}
@@ -128,7 +128,7 @@ export class AnalyticsManager {
     };
   }
 
-  // ── تسک‌ها و پروژه‌ها ────────────────────────────────────────────────
+  // ── Tasks and projects ──────────────────────────────────────────────
   private collectTasks(ws: Workspace): TaskInfo[] {
     const out: TaskInfo[] = [];
     const folders = taskFolders(ws);
@@ -180,7 +180,7 @@ export class AnalyticsManager {
     return out;
   }
 
-  // ── منبع ۱: فایل‌های پوشه‌ی TimeEntries (فقط frontmatter، بدون خوندن فایل) ──
+  // ── Source 1: TimeEntries files (frontmatter only, no file read) ────
   private collectTimeEntryFiles(ws: Workspace, tasksBySlug: Map<string, TaskInfo>): TimeRecord[] {
     const out: TimeRecord[] = [];
     const folders = timeEntryFolders(ws);
@@ -210,7 +210,7 @@ export class AnalyticsManager {
     return out;
   }
 
-  // ── منبع ۲: جدول Time Log داخل خودِ تسک (پشتیبان تسک‌های قدیمی) ──────
+  // ── Source 2: the Time Log table inside a task, for older tasks ─────
   private async collectTaskTableRows(task: TaskInfo): Promise<TimeRecord[]> {
     const cached = this.tableCache.get(task.file.path);
     if (cached && cached.mtime === task.file.stat.mtime) return cached.rows;
@@ -233,7 +233,7 @@ export class AnalyticsManager {
       if (!Number.isFinite(hours)) continue;
       const start = cells[2] ?? "";
       const end = cells[3] ?? "";
-      // ستون Date موقع ثبت «امروز» نوشته می‌شه، پس تاریخ واقعی از start_time میاد
+      // The Date column is written as "today", so the real date comes from start_time
       const iso = this.resolveISO(start, cells[0]);
       if (!iso) continue;
 
@@ -264,7 +264,7 @@ export class AnalyticsManager {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  تجمیع‌هایی که ویو ازشون استفاده می‌کنه
+//  Aggregations the views rely on
 // ══════════════════════════════════════════════════════════════════════
 
 export function sumHours(records: TimeRecord[]): number {
@@ -275,7 +275,8 @@ export function recordsInRange(records: TimeRecord[], fromISO: string, toISO: st
   return records.filter((r) => r.iso >= fromISO && r.iso <= toISO);
 }
 
-/** ساعت هر روزِ بازه — روزهای خالی هم با صفر میان (مخرجِ درست برای heatmap) */
+/** Hours per day across the range — empty days come back as zero, which is the
+ *  correct denominator for the heatmap */
 export function hoursPerDay(records: TimeRecord[], days: string[]): Map<string, number> {
   const map = new Map<string, number>(days.map((d) => [d, 0]));
   for (const r of records) {
@@ -300,7 +301,7 @@ export function groupHoursBy<T>(
     .sort((a, b) => b.hours - a.hours);
 }
 
-/** روزهای پشت‌سرهمی که تا امروز (یا دیروز) کار ثبت شده */
+/** Consecutive days with logged work, counting back from today or yesterday */
 export function currentStreak(byDay: Map<string, TimeRecord[]>): number {
   const today = todayISO();
   let cursor = hasWork(byDay, today) ? today : addDays(today, -1);

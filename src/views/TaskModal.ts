@@ -7,7 +7,7 @@ import { resetTimerWithConfirm } from "./TimerBar";
 import { normalizeStatus } from "../utils/StatusColors";
 
 export class TaskModal extends Modal {
-  // پروژه‌هایی که هنوز باز نشدن یا در حال انجامن — فقط این‌ها موقع ساخت/ویرایش تسک قابل انتخابن
+  // Projects not yet started or in progress — only these can be picked for a task
   private static readonly ACTIVE_PROJECT_STATUSES = ["todo", "active"];
 
   plugin: ProjectManagerPlugin;
@@ -59,7 +59,7 @@ export class TaskModal extends Modal {
           .filter((f: any) => !Array.isArray(f.children) && f.name?.endsWith(".md"))
           .filter((f: any) => {
               const slug = (f.name as string).replace(/\.md$/, "");
-              // پروژه‌ی همین تسک رو همیشه نگه دار، حتی اگه وضعیتش از "todo"/"active" خارج شده باشه
+              // Always keep this task's own project, even once it leaves todo/active
               if (slug === this.projectSlug) return true;
               const status = this.app.metadataCache.getFileCache(f as TFile)?.frontmatter?.status;
               return TaskModal.ACTIVE_PROJECT_STATUSES.includes(normalizeStatus(status));
@@ -73,8 +73,8 @@ export class TaskModal extends Modal {
     contentEl.empty();
     contentEl.addClass("pm-modal");
 
-    // Enter همون کاری رو می‌کنه که نزدیک‌ترین دکمه‌ی اصلی انجام می‌ده:
-    // توی فیلدهای «افزودن دستی زمان» → Add Entry، وگرنه → Create/Save
+    // Enter does what the nearest primary button does: inside the manual-time
+    // fields that is Add Entry, otherwise Create/Save
     contentEl.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.isComposing) return;
       const target = e.target as HTMLElement;

@@ -43,7 +43,7 @@ const RANGES: { id: RangeId; label: string }[] = [
 interface RangeBounds {
   from: string;
   to: string;
-  /** انتهای مؤثر برای آمار — از امروز جلوتر نمی‌ره */
+  /** Effective end for the statistics — never runs past today */
   effTo: string;
   prevFrom: string;
   prevTo: string;
@@ -59,11 +59,11 @@ export class ProjectDashboardView extends ItemView {
 
   private tab: TabId = "projects";
   private range: RangeId = "month";
-  /** روزی که بازه حولش حساب می‌شه — با فلش‌های ◀ ▶ جابه‌جا می‌شه، پس دیگه
-   *  همه‌چیز به «امروز» گره نخورده و می‌شه ماه‌ها و سال‌های قبل رو دید. */
+  /** The day the range is computed around. The ◀ ▶ arrows move it, so nothing is
+   *  pinned to "today" any more and past months and years can be seen. */
   private anchor: string = todayISO();
   private selectedDay: string | null = null;
-  /** مسیر پروژه‌هایی که متنی جز تمپلیت دارن → نشانگر روی کارت */
+  /** Paths of projects holding text beyond the template → marker on the card */
   private noted: Map<string, NoteInfo> = new Map();
   private tooltip: ChartTooltip | null = null;
   private refreshInterval: number | null = null;
@@ -89,8 +89,8 @@ export class ProjectDashboardView extends ItemView {
       }
     }, 1000);
 
-    // رندر دوباره روی هر تغییرِ والت — ولی دیبونس‌شده، چون یک عملیات ذخیره
-    // چند رویداد پشت‌سرهم می‌سازه و رندرِ کاملِ داشبورد ارزون نیست.
+    // Re-render on any vault change, but debounced: one save fires several events
+    // in a row and a full dashboard render is not cheap.
     this.registerEvent(this.app.vault.on("create", () => this.scheduleRender()));
     this.registerEvent(this.app.vault.on("modify", () => this.scheduleRender()));
     this.registerEvent(this.app.vault.on("delete", () => this.scheduleRender()));
@@ -111,7 +111,7 @@ export class ProjectDashboardView extends ItemView {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  رندر
+  //  Render
   // ══════════════════════════════════════════════════════════════════════
 
   async render(): Promise<void> {
@@ -139,7 +139,7 @@ export class ProjectDashboardView extends ItemView {
     scroll.scrollTop = this.scrollTop;
   }
 
-  // ── نوار ابزار و تب‌ها ────────────────────────────────────────────────
+  // ── Toolbar and tabs ────────────────────────────────────────────────
 
   private renderToolbar(container: HTMLElement): void {
     const toolbar = container.createDiv({ cls: "pm-toolbar" });
@@ -170,10 +170,10 @@ export class ProjectDashboardView extends ItemView {
       await this.render();
     });
 
-    // پیمایش دوره — فقط جایی که دوره معنی داره
+    // Period navigation — only where a period means anything
     if (this.tab !== "projects") this.renderPeriodNav(toolbar);
 
-    // فیلترهای وضعیت/اولویت فقط تب پروژه‌ها رو محدود می‌کنن — پس فقط همون‌جا نشون داده می‌شن
+    // Status and priority filters only narrow the projects tab, so they show only there
     if (this.tab === "projects") {
       const statusSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
       statusSelect.createEl("option", { value: "", text: "All statuses" });
@@ -210,10 +210,10 @@ export class ProjectDashboardView extends ItemView {
     renderTimerBar(toolbar, this.plugin, this.currentWorkspace, () => void this.render());
   }
 
-  /** ◀ برچسبِ دوره ▶ + Today — دوره رو از «امروز» جدا می‌کنه */
+  /** ◀ period label ▶ plus Today — separates the period from "today" */
   private renderPeriodNav(toolbar: HTMLElement): void {
     const nav = toolbar.createDiv({ cls: "pm-db-nav" });
-    // «All time» خودش کل بازه‌ست، جایی برای رفتن نداره
+    // "All time" is the whole range already; there is nowhere to step to
     const navigable = this.range !== "all";
 
     const prev = nav.createEl("button", { cls: "pm-db-navbtn", text: "‹" });
@@ -238,7 +238,7 @@ export class ProjectDashboardView extends ItemView {
     });
   }
 
-  /** برچسب دوره بدون نیاز به داده — قبل از collect لازمش داریم */
+  /** Period label without needing data — required before collect runs */
   private periodLabel(): string {
     const { jy, jm } = isoToJalali(this.anchor);
     switch (this.range) {
@@ -279,7 +279,7 @@ export class ProjectDashboardView extends ItemView {
     }
   }
 
-  // ── محاسبه‌ی بازه ─────────────────────────────────────────────────────
+  // ── Range arithmetic ────────────────────────────────────────────────
 
   private bounds(data: AnalyticsData): RangeBounds {
     const today = todayISO();
@@ -328,11 +328,11 @@ export class ProjectDashboardView extends ItemView {
       }
     }
 
-    // بازه‌ی گذشته کاملاً سپری‌شده؛ بازه‌ی آینده هنوز هیچ‌کدوم — «امروز» فقط
-    // بازه‌ی جاری رو نصف می‌کنه
+    // A past range is fully elapsed and a future one not at all — "today" only
+    // ever splits the current range
     const effTo = from > today ? to : to > today ? today : to;
-    // دوره‌ی قبل دقیقاً به اندازه‌ی روزهای سپری‌شده‌ی همین دوره‌ست، نه کل دوره —
-    // وگرنه ماهِ نیمه‌تمام همیشه از ماهِ کاملِ قبلی کمتر در میاد.
+    // The previous period spans exactly as many days as have elapsed in this one,
+    // not the whole period; otherwise a half-done month always loses to a full one.
     const elapsed = Math.max(1, daysBetween(from, effTo) + 1);
     const prevTo = addDays(from, -1);
     const prevFrom = addDays(prevTo, -(elapsed - 1));
@@ -341,7 +341,7 @@ export class ProjectDashboardView extends ItemView {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  تب مرور کلی
+  //  Overview tab
   // ══════════════════════════════════════════════════════════════════════
 
   private renderOverview(root: HTMLElement, data: AnalyticsData): void {
@@ -358,7 +358,7 @@ export class ProjectDashboardView extends ItemView {
     const today = todayISO();
     const overdue = openTasks.filter((t) => t.due && t.due < today);
 
-    // ── خط اول: یک عدد قهرمان + کاشی‌ها ──
+    // ── First line: one hero figure plus tiles ──
     const headline = root.createDiv({ cls: "pm-db-headline" });
     const diff = Math.round((total - prevTotal) * 100) / 100;
     heroFigure(headline, {
@@ -406,7 +406,7 @@ export class ProjectDashboardView extends ItemView {
       sub: overdue.length ? "past their due date" : "nothing past due",
     });
 
-    // ── کارت‌ها ──
+    // ── Cards ──
     const cards = root.createDiv({ cls: "pm-db-cards" });
     this.renderHoursChart(cards, b, inRange, days, perDay);
     this.renderProjectHoursChart(cards, data, inRange);
@@ -421,7 +421,7 @@ export class ProjectDashboardView extends ItemView {
     parent: HTMLElement, b: RangeBounds, inRange: TimeRecord[],
     days: string[], perDay: Map<string, number>
   ): void {
-    // بیش از ۴۵ ستون یعنی ستون‌های موکششی و برچسب‌های روی‌هم — از اون‌جا به بعد هفتگی
+    // Past 45 columns they turn hair-thin and labels collide — weekly from there on
     const weekly = days.length > 45;
     const points: ColumnPoint[] = [];
 
@@ -501,7 +501,7 @@ export class ProjectDashboardView extends ItemView {
       return;
     }
 
-    // بیش از ۸ ردیف خونده نمی‌شه — دنباله توی «Other» جمع می‌شه (نه رنگ جدید)
+    // At most 8 rows are read — the tail is folded into "Other", not given a colour
     const top = grouped.slice(0, 8);
     const rest = grouped.slice(8);
     const rows: BarRow[] = top.map((g) => ({
@@ -562,8 +562,8 @@ export class ProjectDashboardView extends ItemView {
     card.setTable(["Task", "Hours"], grouped.map((g) => [g.label, formatHours(g.hours)]));
   }
 
-  /** وضعیت‌های تنظیمات + هر وضعیتِ ناشناخته‌ای که واقعاً توی فایل‌ها هست —
-   *  وگرنه یک تسک با وضعیت دستی از چارت غیب می‌شد ولی توی شمارشِ کل می‌موند. */
+  /** Statuses from settings plus any unknown status actually present in the files —
+   *  otherwise a task with a hand-written status vanished from the chart yet still counted. */
   private allStatuses(found: string[]): string[] {
     const known = this.plugin.settings.statuses;
     const extra = Array.from(new Set(found)).filter((s) => s && !known.includes(s)).sort();
@@ -689,7 +689,7 @@ export class ProjectDashboardView extends ItemView {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  تب تقویم
+  //  Calendar tab
   // ══════════════════════════════════════════════════════════════════════
 
   private renderCalendarTab(root: HTMLElement, data: AnalyticsData): void {
@@ -765,8 +765,8 @@ export class ProjectDashboardView extends ItemView {
       ])
     );
 
-    // اگر روزِ انتخاب‌شده بیرون از دوره‌ست (مثلاً بعد از جابه‌جایی ماه)، به‌جای
-    // نشون‌دادن یک روزِ نامربوط، شلوغ‌ترین روزِ همین دوره رو باز می‌کنیم
+    // If the selected day falls outside the period, say after stepping a month,
+    // open the busiest day of this period rather than an unrelated one
     const inPeriod = this.selectedDay && this.selectedDay >= b.from && this.selectedDay <= b.to;
     const fallback = today >= b.from && today <= b.to ? today : busiest;
     this.renderDayPanel(root, data, inPeriod ? (this.selectedDay as string) : fallback);
@@ -779,7 +779,7 @@ export class ProjectDashboardView extends ItemView {
     this.renderTaskBreakdown(cards, data, inRange, b);
   }
 
-  /** جمع هر ماه شمسی — برای نمای فصلی/سالانه، با پرش به همون ماه */
+  /** Per Jalali month totals — for the seasonal and yearly views, jumping to a month */
   private renderMonthlyTotals(parent: HTMLElement, data: AnalyticsData, b: RangeBounds): void {
     const groups = groupByJalaliMonth(rangeDays(b.from, b.to));
     const card = chartCard(parent, "Hours per month", `${b.label} · click a month to open it`);
@@ -819,7 +819,7 @@ export class ProjectDashboardView extends ItemView {
     card.setTable(["Month", "Hours", "Active days", "Tasks"], tableRows);
   }
 
-  /** هر تسکی که توی این دوره روش کار شده — اسم، پروژه، ساعت، تعداد روز */
+  /** Every task worked on in this period — name, project, hours, day count */
   private renderTaskBreakdown(
     parent: HTMLElement, data: AnalyticsData, inRange: TimeRecord[], b: RangeBounds
   ): void {
@@ -893,7 +893,7 @@ export class ProjectDashboardView extends ItemView {
       return;
     }
 
-    // ساعت‌های یک تسک در یک روز با هم جمع می‌شن — چند تایمر روی یک تسک یعنی یک ردیف
+    // A task's hours in one day are summed — several timers on one task is one row
     const byTask = new Map<string, { title: string; project: string; hours: number; slug: string }>();
     for (const rec of records) {
       const row = byTask.get(rec.taskSlug) ??
@@ -917,7 +917,7 @@ export class ProjectDashboardView extends ItemView {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  تب پروژه‌ها — همون تخته‌ی وضعیت‌محورِ قبلی
+  //  Projects tab — the same status board as before
   // ══════════════════════════════════════════════════════════════════════
 
   private renderProjectsTab(root: HTMLElement, data: AnalyticsData): void {

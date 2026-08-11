@@ -2,9 +2,9 @@ import { normalizePath } from "obsidian";
 import { Workspace } from "../types";
 
 /**
- * مسیرهای یک workspace در دو نسخه وجود دارن: فعال و بایگانی‌شده. هر جایی که
- * فایل‌ها رو جمع می‌کنیم باید *هر دو* رو ببینه، وگرنه به محضِ بایگانی‌شدنِ یه
- * تسک، ساعت‌هاش از گزارش‌ها و تقویم غیب می‌شن.
+ * A workspace's folders exist in two versions, active and archived. Anywhere that
+ * collects files has to look at *both*, or the moment a task is archived its
+ * hours vanish from the reports and the calendar.
  */
 
 export function archiveEnabled(ws: Workspace): boolean {
@@ -23,7 +23,7 @@ export function archiveTimeEntriesFolder(ws: Workspace): string {
   return normalizePath(`${ws.archiveFolder}/TimeEntries`);
 }
 
-/** پوشه‌های تسک: [فعال, بایگانی] — یا فقط فعال اگه بایگانی خاموشه */
+/** Task folders: [active, archived] — or just active when archiving is off */
 export function taskFolders(ws: Workspace): string[] {
   return archiveEnabled(ws)
     ? [normalizePath(ws.tasksFolder), archiveTasksFolder(ws)]
@@ -42,7 +42,7 @@ export function timeEntryFolders(ws: Workspace): string[] {
     : [normalizePath(ws.timeEntriesFolder)];
 }
 
-/** آیا این مسیر زیر یکی از این پوشه‌هاست؟ */
+/** Is this path under any of these folders? */
 export function isUnderAnyFolder(path: string, folders: string[]): boolean {
   return folders.some((f) => f && path.startsWith(`${f}/`));
 }
@@ -52,7 +52,7 @@ export function isArchivedPath(ws: Workspace, path: string): boolean {
   return path.startsWith(`${normalizePath(ws.archiveFolder)}/`);
 }
 
-/** مسیر پیش‌فرضِ بایگانی برای workspaceهایی که هنوز تنظیمش نکردن */
+/** Default archive path for workspaces that have not set one */
 export function defaultArchiveFolder(rootFolder: string): string {
   return `${rootFolder}/Archive`;
 }

@@ -1,7 +1,7 @@
 // ╔══════════════════════════════════════════════════════════════════════╗
-// ║  Jalali — تبدیل و کار با تقویم شمسی، کاملاً خودکفا                    ║
-// ║  عمداً به پلاگین persian-calendar وابسته نیست تا داشبورد روی هر        ║
-// ║  والتی بدون پیش‌نیاز کار کنه. الگوریتم همون jalaali-js استاندارده.    ║
+// ║  Jalali — Persian calendar conversion and helpers, self-contained    ║
+// ║  Deliberately independent of the persian-calendar plugin so the      ║
+// ║  dashboard works in any vault. Algorithm is the standard jalaali-js. ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 export const MONTHS_FA = [
@@ -11,13 +11,13 @@ export const MONTHS_FA = [
 
 export const MONTHS_SHORT_FA = ["فر", "ار", "خر", "تی", "مر", "شه", "مه", "آب", "آذ", "دی", "به", "اس"];
 
-// هفته‌ی شنبه‌محور — ستون ۰ شنبه‌ست
+// Saturday-first week — column 0 is Saturday
 export const WEEKDAYS_FA = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
 export const WEEKDAYS_FULL_FA = ["شنبه", "یک‌شنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه", "جمعه"];
 
 export const SEASONS_FA = ["بهار", "تابستان", "پاییز", "زمستان"];
 
-// Date.getDay() (۰ = یک‌شنبه) → ستون هفته‌ی شنبه‌محور
+// Date.getDay(), where 0 is Sunday, → a Saturday-first week column
 const JS_COL = [1, 2, 3, 4, 5, 6, 0];
 
 export interface JalaliDate { jy: number; jm: number; jd: number; }
@@ -26,7 +26,7 @@ export interface GregorianDate { gy: number; gm: number; gd: number; }
 function div(a: number, b: number): number { return ~~(a / b); }
 function mod(a: number, b: number): number { return a - ~~(a / b) * b; }
 
-// سال‌های شکست در چرخه‌ی کبیسه‌ی جلالی (الگوریتم بورکارد/خیام)
+// Breakpoint years in the Jalali leap cycle (Borkowski/Khayyam algorithm)
 const BREAKS = [
   -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181,
   1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178,
@@ -39,7 +39,7 @@ function jalCal(jy: number): { leap: number; gy: number; march: number } {
   let jp = BREAKS[0];
 
   if (jy < jp || jy >= BREAKS[bl - 1]) {
-    // خارج از بازه‌ی معتبر — به‌جای throw، مقدار امن برمی‌گردونیم تا داشبورد نترکه
+    // Out of range — return something safe instead of throwing, so the dashboard lives
     return { leap: 0, gy, march: 20 };
   }
 
@@ -127,9 +127,9 @@ export function jalaliMonthLength(jy: number, jm: number): number {
   return isLeapJalaliYear(jy) ? 30 : 29;
 }
 
-// ── کار با رشته‌ی ISO محلی (YYYY-MM-DD) ───────────────────────────────────
-// همه‌جای داشبورد «روز» با همین رشته نمایندگی می‌شه — نه با Date، تا مسئله‌ی
-// تایم‌زون فقط یک بار، همین‌جا، حل بشه.
+// ── Working with local ISO strings (YYYY-MM-DD) ─────────────────────────
+// A "day" is represented by this string everywhere in the dashboard rather than
+// by a Date, so the timezone problem is solved once, here.
 
 export function toISODate(d: Date): string {
   const y = d.getFullYear();
@@ -138,7 +138,7 @@ export function toISODate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-// ظهر محلی می‌سازیم تا جابه‌جایی ساعت تابستانی هیچ‌وقت روز رو یکی جلو/عقب نبره
+// Built at local noon so a daylight-saving shift never moves the day by one
 export function isoToDate(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
@@ -158,7 +158,7 @@ export function daysBetween(fromISO: string, toISO: string): number {
   return Math.round((isoToDate(toISO).getTime() - isoToDate(fromISO).getTime()) / 86400000);
 }
 
-// همه‌ی روزهای یک بازه (شامل هر دو سر)
+// Every day in a range, both ends included
 export function rangeDays(fromISO: string, toISO: string): string[] {
   const out: string[] = [];
   const total = daysBetween(fromISO, toISO);
@@ -177,24 +177,24 @@ export function jalaliToISO(jy: number, jm: number, jd: number): string {
   return toISODate(new Date(gy, gm - 1, gd, 12));
 }
 
-// ── نمایش ────────────────────────────────────────────────────────────────
+// ── Display ─────────────────────────────────────────────────────────────
 
 export function toPersianDigits(value: string | number): string {
   return String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
 }
 
-/** «۱۷ مرداد ۱۴۰۵» */
+/** Day, month name and year in Persian digits, e.g. ۱۷ مرداد ۱۴۰۵ */
 export function jalaliLabel(iso: string): string {
   const { jy, jm, jd } = isoToJalali(iso);
   return `${toPersianDigits(jd)} ${MONTHS_FA[jm - 1]} ${toPersianDigits(jy)}`;
 }
 
-/** «مرداد ۱۴۰۵» */
+/** Month name and year in Persian digits, e.g. مرداد ۱۴۰۵ */
 export function jalaliMonthLabel(jy: number, jm: number): string {
   return `${MONTHS_FA[jm - 1]} ${toPersianDigits(jy)}`;
 }
 
-/** «شنبه» */
+/** Full Persian weekday name, e.g. شنبه */
 export function weekdayLabel(iso: string): string {
   return WEEKDAYS_FULL_FA[weekdayCol(iso)];
 }
@@ -203,21 +203,21 @@ export function seasonName(jm: number): string {
   return SEASONS_FA[Math.floor((jm - 1) / 3)];
 }
 
-// ── چیدمان تقویم ─────────────────────────────────────────────────────────
+// ── Calendar layout ─────────────────────────────────────────────────────
 
-/** ستون هفته‌ی شنبه‌محور برای یک روز */
+/** Saturday-first week column for a given day */
 export function weekdayCol(iso: string): number {
   return JS_COL[isoToDate(iso).getDay()];
 }
 
-/** ستون شروع اولین روز یک ماه جلالی — برای خالی‌گذاشتن ابتدای گرید */
+/** Start column of a Jalali month's first day — pads the top of the grid */
 export function jalaliFirstWeekdayCol(jy: number, jm: number): number {
   return weekdayCol(jalaliToISO(jy, jm, 1));
 }
 
 export interface JalaliMonthGroup { jy: number; jm: number; isos: string[]; }
 
-/** روزهای یک بازه رو بر اساس ماه جلالی گروه می‌کنه */
+/** Groups the days of a range by Jalali month */
 export function groupByJalaliMonth(isos: string[]): JalaliMonthGroup[] {
   const groups = new Map<string, JalaliMonthGroup>();
   for (const iso of isos) {
@@ -230,32 +230,32 @@ export function groupByJalaliMonth(isos: string[]): JalaliMonthGroup[] {
   return Array.from(groups.values()).sort((a, b) => (a.jy !== b.jy ? a.jy - b.jy : a.jm - b.jm));
 }
 
-/** شنبه‌ی هفته‌ای که این روز توش قرار داره */
+/** The Saturday of the week this day falls in */
 export function startOfJalaliWeek(iso: string): string {
   return addDays(iso, -weekdayCol(iso));
 }
 
-/** اول ماه جلالیِ همین روز */
+/** First day of this day's Jalali month */
 export function startOfJalaliMonth(iso: string): string {
   const { jy, jm } = isoToJalali(iso);
   return jalaliToISO(jy, jm, 1);
 }
 
-/** اول فصل جلالیِ همین روز */
+/** First day of this day's Jalali season */
 export function startOfJalaliSeason(iso: string): string {
   const { jy, jm } = isoToJalali(iso);
   return jalaliToISO(jy, Math.floor((jm - 1) / 3) * 3 + 1, 1);
 }
 
-/** اول سال جلالیِ همین روز */
+/** First day of this day's Jalali year */
 export function startOfJalaliYear(iso: string): string {
   const { jy } = isoToJalali(iso);
   return jalaliToISO(jy, 1, 1);
 }
 
 /**
- * چند ماه شمسی جلو/عقب. روز به آخرین روزِ ماه مقصد چفت می‌شه، چون مثلاً
- * ۳۱ مرداد در مهر وجود نداره و ۳۰ اسفند فقط سال کبیسه هست.
+ * Shifts by whole Jalali months. The day clamps to the target month's last day,
+ * since the 31st does not exist in every month and Esfand 30 only in leap years.
  */
 export function shiftJalaliMonths(iso: string, delta: number): string {
   const { jy, jm, jd } = isoToJalali(iso);

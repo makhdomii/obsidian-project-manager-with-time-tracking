@@ -5,7 +5,7 @@ import { TaskManager } from "./TaskManager";
 
 export class TimeTracker {
   private activeTimer: ActiveTimer | null = null;
-  /** هر تغییرِ وضعیت باید روی دیسک بشینه، وگرنه بعد از کرش برنمی‌گرده */
+  /** Every state change has to reach disk, or it will not survive a crash */
   private persist: () => void = () => {};
 
   constructor(private app: App, private taskManager: TaskManager) {}
@@ -14,7 +14,7 @@ export class TimeTracker {
     this.persist = fn;
   }
 
-  // ── چرخه‌ی عمر ────────────────────────────────────────────────────────
+  // ── Lifecycle ───────────────────────────────────────────────────────
 
   startTimer(taskPath: string, taskTitle: string, workspaceId: string): void {
     if (this.activeTimer) {
@@ -32,7 +32,7 @@ export class TimeTracker {
     this.persist();
   }
 
-  /** سگمنت جاری رو می‌بنده و مدتش رو بانک می‌کنه. روی تایمرِ پازشده بی‌اثره. */
+  /** Closes the current segment and banks it. A no-op on a paused timer. */
   pause(): void {
     const t = this.activeTimer;
     if (!t) throw new Error("No active timer");
@@ -59,8 +59,8 @@ export class TimeTracker {
     if (!this.activeTimer) throw new Error("No active timer");
     const t = this.activeTimer;
 
-    // ساعتِ ثبت‌شده = زمانِ واقعیِ کارکرد (بدون پازها)، نه فاصله‌ی تقویمیِ
-    // شروع تا پایان. برای همین دیگه از diffHours استفاده نمی‌کنیم.
+    // Logged hours are time actually worked, pauses excluded — not the wall-clock
+    // span from start to stop. Which is why diffHours is no longer used here.
     const hours = Math.round((this.getElapsedMs() / 3600000) * 100) / 100;
     const start = new Date(t.startedAt);
     const end = new Date();
@@ -79,16 +79,16 @@ export class TimeTracker {
     return hours;
   }
 
-  /** بدون ثبت هیچ چیزی دور می‌ندازه — برای وقتی که تایمرِ بازیابی‌شده غلطه */
+  /** Throws it away without logging — for when a restored timer is wrong */
   discard(): void {
     this.activeTimer = null;
     this.persist();
   }
 
   /**
-   * شمارنده رو صفر می‌کنه ولی تایمر روی همون تسک باز می‌مونه. چیزی ثبت نمی‌شه،
-   * یعنی زمانِ شمرده‌شده از بین می‌ره. حالتِ پاز حفظ می‌شه: تایمرِ پازشده بعد
-   * از ریست هم پازه، نه این‌که یهو شروع کنه به شمردن.
+   * Zeroes the counter while the timer stays open on the same task. Nothing is
+   * logged, so the counted time is lost. The paused state is kept: a paused timer
+   * is still paused after a reset rather than springing into life.
    */
   reset(): void {
     const t = this.activeTimer;
@@ -100,16 +100,16 @@ export class TimeTracker {
     this.persist();
   }
 
-  // ── ذخیره/بازیابی ─────────────────────────────────────────────────────
+  // ── Persistence ─────────────────────────────────────────────────────
 
   serialize(): ActiveTimer | null {
     return this.activeTimer;
   }
 
   /**
-   * تایمرِ ذخیره‌شده رو برمی‌گردونه. چون گذشتِ زمان از تایم‌استمپ‌ها حساب می‌شه،
-   * تایمری که موقع کرش در حال اجرا بوده، مدتِ خاموشی رو هم می‌شمره — عمداً،
-   * چون نمی‌دونیم کِی کرش شده. main.ts به کاربر خبر می‌ده تا اگه غلطه پاکش کنه.
+   * Restores a saved timer. Because elapsed time comes from timestamps, a timer
+   * that was running during a crash also counts the downtime. That is deliberate:
+   * we cannot know when it died. main.ts tells the user so they can discard it.
    */
   restore(saved: unknown): boolean {
     if (!saved || typeof saved !== "object") return false;
@@ -134,7 +134,7 @@ export class TimeTracker {
     return true;
   }
 
-  // ── خواندن وضعیت ──────────────────────────────────────────────────────
+  // ── Reading state ───────────────────────────────────────────────────
 
   getActiveTimer(): ActiveTimer | null {
     return this.activeTimer;
@@ -154,7 +154,7 @@ export class TimeTracker {
     return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
-  /** یعنی تایمری هست (چه در حال شمردن، چه پازشده) */
+  /** There is a timer, whether it is counting or paused */
   isRunning(): boolean {
     return this.activeTimer !== null;
   }
@@ -163,7 +163,7 @@ export class TimeTracker {
     return this.activeTimer !== null && this.activeTimer.segmentStart === null;
   }
 
-  /** در حال شمردن — نه متوقف، نه پاز */
+  /** Actually counting — neither stopped nor paused */
   isTicking(): boolean {
     return this.activeTimer !== null && this.activeTimer.segmentStart !== null;
   }
@@ -172,7 +172,7 @@ export class TimeTracker {
     return this.activeTimer?.taskPath ?? null;
   }
 
-  // ── نوشتن ─────────────────────────────────────────────────────────────
+  // ── Writing ─────────────────────────────────────────────────────────
 
   async addManualEntry(
     ws: Workspace,

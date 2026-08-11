@@ -1,30 +1,31 @@
-// رنگ‌های status/priority از پالتِ اعتبارسنجی‌شده‌ی داشبورد میان (توکن‌های
-// --pm-cat-* و --pm-status-*, تعریف‌شده در styles/dashboardStyles.ts) نه از
-// متغیرهای تم. دلیلش اینه که این رنگ‌ها «داده» رمزگذاری می‌کنن: باید بین
-// کانبان و چارت‌ها یکی باشن و جداشدنی‌بودنشون زیر کوررنگی تضمین‌شده بمونه.
-// خودِ توکن‌ها برای تم روشن و تاریک دو مقدار جدا دارن، پس با تم عوض می‌شن.
+// status and priority colours come from the dashboard's validated palette (the
+// --pm-cat-* and --pm-status-* tokens defined in styles/dashboardStyles.ts) rather
+// than theme variables. These colours encode *data*: they have to agree between
+// the kanban and the charts, and stay distinguishable under colour blindness.
+// The tokens themselves carry separate light and dark values, so they follow the theme.
 
-// ترتیب اسلات‌ها اتفاقی نیست: همین ترتیب (آبی، نارنجی، فیروزه‌ای، قرمز، بنفش)
-// با validate_palette تست شده — بدترین جفتِ همسایه ΔE ۶٫۹ زیر دوتان، که فقط
-// همراه رمزگذاری دوم مجازه؛ برای همین همه‌جا لجند/برچسب/فاصله‌ی ۲px داریم.
+// The slot order is not arbitrary: this sequence (blue, orange, teal, red, purple)
+// was checked with validate_palette — the worst neighbouring pair is ΔE 6.9, below
+// the threshold, which is only allowed alongside a second encoding — hence the
+// legends, labels and 2px gaps everywhere.
 const STATUS_SLOT: Record<string, number> = {
-  todo: 1,    // آبی
-  active: 2,  // نارنجی
-  done: 3,    // فیروزه‌ای
-  cancel: 8,  // قرمز
-  quite: 7,   // بنفش
+  todo: 1,    // blue
+  active: 2,  // orange
+  done: 3,    // teal
+  cancel: 8,  // red
+  quite: 7,   // purple
 };
 
 /**
- * status فرontmatter → نامِ متعارف. فقط lowercase و trim — هیچ نگاشتی از
- * نام‌های قدیمی نداریم؛ نام قدیمی یعنی داده‌ی مهاجرت‌نکرده، نه یه مترادف.
+ * frontmatter status → canonical name. Lowercase and trim only; there is no
+ * mapping from old names, because an old name means unmigrated data, not a synonym.
  */
 export function normalizeStatus(status: unknown): string {
   return String(status ?? "").trim().toLowerCase();
 }
 
-// اسلات‌های باقی‌مانده‌ی پالت برای وضعیت‌های دلخواهِ کاربر — هیچ‌وقت رنگ جدید
-// «ساخته» نمی‌شه، فقط از همین هشت‌تا انتخاب می‌شه.
+// The palette's remaining slots serve user-defined statuses — a new colour is never
+// invented, one of these eight is chosen.
 const FALLBACK_SLOTS = [4, 5, 6];
 
 const PRIORITY_TOKENS: Record<string, string> = {
@@ -34,7 +35,7 @@ const PRIORITY_TOKENS: Record<string, string> = {
   critical: "var(--pm-status-critical)",
 };
 
-/** هش پایدار — تا یک وضعیت با فیلترشدن بقیه رنگش عوض نشه */
+/** Stable hash — so a status does not change colour when others are filtered out */
 function stableIndex(key: string, buckets: number): number {
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
@@ -54,7 +55,7 @@ export function priorityColor(priority: string): string {
   return PRIORITY_TOKENS[(priority ?? "").toLowerCase()] ?? "var(--text-faint)";
 }
 
-// این وضعیت‌ها دیگه کاری نیستن که لازم باشه هر بار توجه بگیرن — کم‌رنگ نشون داده می‌شن
+// These statuses no longer need attention every time — they are shown muted
 const MUTED_STATUSES = new Set(["done", "cancel", "quite"]);
 
 export function isMutedStatus(status: string): boolean {

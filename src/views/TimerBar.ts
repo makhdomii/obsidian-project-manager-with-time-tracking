@@ -3,12 +3,12 @@ import type ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { ConfirmModal } from "./ConfirmModal";
 
-/** زیر این حد چیزی برای از دست دادن نیست، پس بی‌سؤال ریست می‌کنیم */
+/** Below this there is nothing to lose, so reset without asking */
 const RESET_CONFIRM_THRESHOLD_MS = 60_000;
 
 /**
- * ریست: شمارنده صفر می‌شه و هیچی ثبت نمی‌شه. چون زمانِ شمرده‌شده برنمی‌گرده،
- * اگه چیز قابل‌توجهی روی تایمر باشه اول می‌پرسیم.
+ * Reset: the counter goes to zero and nothing is logged. Since the counted time
+ * does not come back, we ask first when there is anything meaningful on it.
  */
 export function resetTimerWithConfirm(
   app: App,
@@ -43,10 +43,10 @@ export function resetTimerWithConfirm(
 }
 
 /**
- * نوارِ تایمرِ فعال — یک پیاده‌سازی، مشترک بین کانبان و داشبورد، تا دکمه‌ی
- * پاز فقط توی یکی‌شون نباشه.
+ * The active timer bar — one implementation shared by the kanban and the
+ * dashboard, so the pause button cannot exist in only one of them.
  *
- * onChange بعد از هر عملیات صدا زده می‌شه تا نمای میزبان دوباره رندر بشه.
+ * onChange fires after each action so the hosting view can re-render.
  */
 export function renderTimerBar(
   parent: HTMLElement,
@@ -96,11 +96,11 @@ export function renderTimerBar(
 }
 
 /**
- * همه‌ی نمایشگرهای زمان توی این کانتینر رو نو می‌کنه.
+ * Refreshes every elapsed-time display inside this container.
  *
- * قبلاً این‌جا querySelector تکی بود، برای همین فقط اولین المان (نوار بالای
- * صفحه) تیک می‌خورد و تایمرِ روی کارتِ تسک تا ابد روی همون مقدارِ لحظه‌ی رندر
- * — یعنی 0:00:00 — می‌موند.
+ * This used to be a single querySelector, so only the first element — the bar at
+ * the top — ever ticked, and the timer on a task card stayed forever at whatever
+ * it read when rendered, namely 0:00:00.
  */
 export function tickTimerDisplays(container: HTMLElement, plugin: ProjectManagerPlugin): void {
   const text = plugin.timeTracker.getElapsed();

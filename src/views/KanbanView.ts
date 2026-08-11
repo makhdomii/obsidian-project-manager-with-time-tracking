@@ -9,7 +9,7 @@ import { renderTimerBar, resetTimerWithConfirm, tickTimerDisplays } from "./Time
 
 export const KANBAN_VIEW_TYPE = "project-manager-kanban";
 
-/** چند کارت از یک ستونِ بسته پیش‌فرض دیده بشه */
+/** How many cards of a closed column are shown by default */
 const COLLAPSED_LIMIT = 8;
 
 export class KanbanView extends ItemView {
@@ -17,9 +17,9 @@ export class KanbanView extends ItemView {
   currentWorkspace: Workspace;
   filterProject: string = "";
   filterPriority: string = "";
-  /** مسیر تسک‌هایی که متنی جز تمپلیت دارن → نشانگر روی کارت */
+  /** Paths of tasks holding text beyond the template → marker on the card */
   private noted: Map<string, NoteInfo> = new Map();
-  /** ستون‌های بسته‌ای که کاربر بازشون کرده — باید از رندرِ بعدی جون سالم ببره */
+  /** Closed columns the user expanded — has to survive the next render */
   private expandedCols: Set<string> = new Set();
   private refreshInterval: number | null = null;
 
@@ -87,8 +87,8 @@ export class KanbanView extends ItemView {
         return true;
       });
 
-      // ستون‌های بسته با گذشتِ زمان فقط بلندتر می‌شن و چیزی که تازه بسته شده
-      // ته صفحه گم می‌شه — پس تازه‌ترین‌ها اول، و بقیه پشت یه دکمه.
+      // Closed columns only ever grow, and whatever was just closed gets lost at
+      // the bottom — so newest first, with the rest behind a button.
       const closed = isMutedStatus(status);
       if (closed) {
         colFiltered.sort((a, b) => b.stat.mtime - a.stat.mtime);

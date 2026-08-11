@@ -5,13 +5,13 @@ import { slugify } from "./utils/FrontmatterUtils";
 import { isUnderAnyFolder, projectFolders, taskFolders } from "./utils/WorkspacePaths";
 
 /**
- * سطحِ عمومیِ پلاگین برای پلاگین‌های دیگه.
+ * The plugin's public surface for other plugins.
  *
- * از بیرون این‌طوری گرفته می‌شه:
+ * Reached from outside like this:
  *   app.plugins.plugins["project-manager-with-time-tracking"]?.api
  *
- * version عمداً هست تا مصرف‌کننده بتونه قبل از شروع تشخیص بده با نسخه‌ی قدیمی
- * طرفه، نه این‌که وسطِ کار بترکه.
+ * version is here on purpose so a consumer can tell up front that it is facing
+ * an old build, rather than blowing up midway through.
  */
 export const PM_API_VERSION = 1;
 
@@ -45,7 +45,7 @@ export interface PmCreateTaskInput {
   status?: string;
   priority?: string;
   due?: string;
-  /** فیلدهای اضافیِ frontmatter — برای ردیابیِ منبعِ بیرونی */
+  /** Extra frontmatter fields — for tracking an external source */
   extra?: Record<string, string | number>;
 }
 

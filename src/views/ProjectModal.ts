@@ -41,7 +41,7 @@ export class ProjectModal extends Modal {
     contentEl.empty();
     contentEl.addClass("pm-modal");
 
-    // Enter تو هر فیلدی همون کاری رو می‌کنه که کلیک روی Create/Save می‌کنه
+    // Enter in any field does what clicking Create/Save does
     contentEl.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.isComposing) return;
       if ((e.target as HTMLElement).tagName === "TEXTAREA") return;

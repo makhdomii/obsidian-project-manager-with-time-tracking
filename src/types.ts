@@ -6,9 +6,9 @@ export interface Workspace {
   tasksFolder: string;
   timeEntriesFolder: string;
   /**
-   * ریشه‌ی بایگانی. تسک/پروژه‌ای که وضعیتش بسته می‌شه با تایم‌انتری‌هاش به
-   * زیرپوشه‌های Tasks/Projects/TimeEntries همین‌جا منتقل می‌شه. خالی یعنی
-   * بایگانی خاموش. (workspaceهای قدیمی این کلید رو ندارن — موقع لود پر می‌شه.)
+   * Archive root. A task or project whose status closes moves here, together
+   * with its time entries, into Tasks/Projects/TimeEntries subfolders. Empty
+   * turns archiving off. Older workspaces lack this key and get it filled on load.
    */
   archiveFolder: string;
 }
@@ -79,21 +79,21 @@ export interface TimeEntry {
 }
 
 /**
- * تایمر فعال. همه‌چیزش سریالایزبله (تاریخ‌ها ISO string‌ان، نه Date) چون عیناً
- * توی data.json ذخیره می‌شه تا اگه اوبسیدین کرش کرد یا بسته شد، تایمر از همون
- * جایی که بود برگرده.
+ * The active timer. Everything is serialisable — dates are ISO strings, not Date —
+ * because it is stored verbatim in data.json so that a crash or a close brings the
+ * timer back exactly where it was.
  *
- * مدت‌زمان از روی تایم‌استمپ‌ها حساب می‌شه نه از روی یه شمارنده‌ی در حافظه،
- * برای همین لازم نیست هر ثانیه روی دیسک بنویسیم — فقط موقع تغییرِ وضعیت.
+ * Elapsed time is derived from timestamps rather than an in-memory counter, so
+ * there is no need to write to disk every second — only on a state change.
  */
 export interface ActiveTimer {
   taskPath: string;
   taskTitle: string;
   workspaceId: string;
-  /** ISO — لحظه‌ی اولین start؛ همین به‌عنوان start_time توی time entry می‌شینه */
+  /** ISO — the first start; this is what lands as start_time on the time entry */
   startedAt: string;
-  /** ISO — شروع سگمنتِ در حال اجرا. null یعنی الان پاز است. */
+  /** ISO — start of the running segment. null means it is paused. */
   segmentStart: string | null;
-  /** میلی‌ثانیه‌ی جمع‌شده از سگمنت‌های تمام‌شده (قبل از پازهای قبلی) */
+  /** Milliseconds banked from segments already closed by earlier pauses */
   accumulatedMs: number;
 }

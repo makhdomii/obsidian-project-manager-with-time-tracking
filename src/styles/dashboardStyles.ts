@@ -1,12 +1,13 @@
 // ╔══════════════════════════════════════════════════════════════════════╗
-// ║  استایل داشبورد + توکن‌های رنگِ داده                                   ║
-// ║  «کروم» (پس‌زمینه، متن، خط‌ها) از متغیرهای خود اوبسیدین میاد تا با هر  ║
-// ║  تمی جفت بشه؛ ولی «رنگِ داده» از پالت ثابتِ اعتبارسنجی‌شده میاد، چون   ║
-// ║  باید بین چارت‌ها یکی باشه و زیر کوررنگی جدا بمونه.                   ║
+// ║  Dashboard styles plus the data colour tokens                        ║
+// ║  Chrome — background, text, rules — comes from Obsidian's own        ║
+// ║  variables so it suits any theme. Data colour instead comes from a   ║
+// ║  fixed validated palette: it must agree across charts and stay       ║
+// ║  separable under colour blindness.                                   ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 export const DASHBOARD_STYLES = `
-/* ===== توکن‌های پالت — تم روشن ===== */
+/* ===== Palette tokens — light theme ===== */
 body {
   --pm-cat-1:#2a78d6; --pm-cat-2:#eb6834; --pm-cat-3:#1baf7a; --pm-cat-4:#eda100;
   --pm-cat-5:#e87ba4; --pm-cat-6:#008300; --pm-cat-7:#4a3aa7; --pm-cat-8:#e34948;
@@ -14,12 +15,12 @@ body {
   --pm-status-good:#0ca30c; --pm-status-warning:#fab219;
   --pm-status-serious:#ec835a; --pm-status-critical:#d03b3b;
 
-  /* رمپ تک‌رنگ آبی برای شدت — کم‌رنگ‌ترین پله نزدیک سطحه */
+  /* Single-hue blue ramp for intensity — the faintest step sits near the surface */
   --pm-heat-1:#cde2fb; --pm-heat-2:#9ec5f4; --pm-heat-3:#5598e7;
   --pm-heat-4:#2a78d6; --pm-heat-5:#184f95;
 }
-/* در تم تاریک همون هشت رنگ برای سطح تیره پله‌گذاری شده — نه معکوسِ خودکار.
-   رمپ شدت هم برعکس می‌شه: «نزدیک صفر» باید به سطح نزدیک باشه، که اینجا تیره‌ست. */
+/* In dark themes the same eight colours are re-stepped against a dark surface,
+   not auto-inverted. The intensity ramp flips too: near-zero belongs near the surface. */
 body.theme-dark {
   --pm-cat-1:#3987e5; --pm-cat-2:#d95926; --pm-cat-3:#199e70; --pm-cat-4:#c98500;
   --pm-cat-5:#d55181; --pm-cat-6:#008300; --pm-cat-7:#9085e9; --pm-cat-8:#e66767;
@@ -28,7 +29,7 @@ body.theme-dark {
   --pm-heat-4:#3987e5; --pm-heat-5:#86b6ef;
 }
 
-/* ===== اسکلت داشبورد ===== */
+/* ===== Dashboard skeleton ===== */
 .pm-dashboard-container {
   display: flex;
   flex-direction: column;
@@ -62,7 +63,7 @@ body.theme-dark {
 
 .pm-db-scroll { flex: 1; overflow-y: auto; padding: 18px 16px 28px; }
 
-/* ===== پیمایش دوره ===== */
+/* ===== Period navigation ===== */
 .pm-db-nav {
   display: flex; align-items: center; gap: 2px;
   border: 1px solid var(--background-modifier-border);
@@ -98,7 +99,7 @@ body.theme-dark {
   color: var(--text-faint); margin: 0 2px 10px;
 }
 
-/* ===== عدد قهرمان + کاشی‌ها ===== */
+/* ===== Hero figure and stat tiles ===== */
 .pm-db-headline {
   display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px; margin-bottom: 18px;
 }
@@ -111,7 +112,7 @@ body.theme-dark {
 }
 .pm-db-hero-label { font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px; }
 .pm-db-hero-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-/* ارقام متناسب (نه tabular) — عدد بزرگ با عرض یکسانِ ارقام شل به نظر می‌رسه */
+/* Proportional figures, not tabular — a large number looks slack in fixed widths */
 .pm-db-hero-value { font-size: 48px; font-weight: 650; line-height: 1.05; color: var(--text-normal); }
 .pm-db-hero-unit { font-size: 15px; color: var(--text-muted); }
 .pm-db-hero-sub { font-size: 11.5px; color: var(--text-faint); margin-top: 6px; unicode-bidi: plaintext; }
@@ -142,7 +143,7 @@ body.theme-dark {
 .pm-db-tone-warn .pm-db-tile-value { color: var(--pm-status-warning); }
 .pm-db-tone-critical .pm-db-tile-value { color: var(--pm-status-critical); }
 
-/* ===== کارت چارت ===== */
+/* ===== Chart card ===== */
 .pm-db-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
@@ -180,7 +181,7 @@ body.theme-dark {
 .pm-db-table th { color: var(--text-muted); font-weight: 600; }
 .pm-db-table td { color: var(--text-normal); font-variant-numeric: tabular-nums; }
 
-/* ===== چارت ستونی ===== */
+/* ===== Column chart ===== */
 .pm-db-plot { display: flex; gap: 8px; padding-bottom: 20px; }
 .pm-db-yaxis {
   display: flex; flex-direction: column; justify-content: space-between;
@@ -216,7 +217,7 @@ body.theme-dark {
   white-space: nowrap; pointer-events: none; unicode-bidi: plaintext;
 }
 
-/* ===== میله‌های افقی ===== */
+/* ===== Horizontal bars ===== */
 .pm-db-bars { display: flex; flex-direction: column; gap: 4px; }
 .pm-db-brow {
   display: grid; grid-template-columns: minmax(80px, 32%) 1fr auto;
@@ -238,9 +239,9 @@ body.theme-dark {
   white-space: nowrap;
 }
 
-/* ===== میله‌ی انباشته + لجند ===== */
+/* ===== Stacked bar and legend ===== */
 .pm-db-stackwrap { display: flex; flex-direction: column; gap: 12px; }
-/* جداکننده‌ی قطعه‌ها فاصله‌ی ۲px به رنگ سطحه، نه خط دور مارک */
+/* Segments are separated by a 2px gap in the surface colour, not an outline */
 .pm-db-stack { display: flex; gap: 2px; height: 14px; }
 .pm-db-seg { min-width: 3px; }
 .pm-db-seg:first-child { border-radius: 4px 0 0 4px; }
@@ -255,7 +256,7 @@ body.theme-dark {
 .pm-db-legname { color: var(--text-muted); }
 .pm-db-legval { color: var(--text-normal); font-weight: 650; font-variant-numeric: tabular-nums; }
 
-/* ===== تقویم شمسی ===== */
+/* ===== Jalali calendar ===== */
 .pm-db-cal { direction: rtl; }
 .pm-db-cal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
 .pm-db-calmtitle {
@@ -295,14 +296,14 @@ body.theme-dark {
 .pm-db-hmcell.is-today { outline: 2px solid var(--text-accent); outline-offset: -2px; }
 .pm-db-hmcell.is-selected { outline: 2px solid var(--text-normal); outline-offset: 1px; }
 
-/* پله‌های شدت — هم برای سلول تقویم، هم برای راهنمای مقیاس */
+/* Intensity steps — used by both the calendar cell and the scale legend */
 .pm-dashboard-container [data-heat="0"] { background: var(--background-modifier-border); color: var(--text-faint); }
 .pm-dashboard-container [data-heat="1"] { background: var(--pm-heat-1); }
 .pm-dashboard-container [data-heat="2"] { background: var(--pm-heat-2); }
 .pm-dashboard-container [data-heat="3"] { background: var(--pm-heat-3); }
 .pm-dashboard-container [data-heat="4"] { background: var(--pm-heat-4); }
 .pm-dashboard-container [data-heat="5"] { background: var(--pm-heat-5); }
-/* متنِ داخل سلولِ رنگی بر اساس روشناییِ همون پله انتخاب می‌شه */
+/* Text inside a filled cell is chosen from that step's lightness */
 .pm-db-calcell[data-heat="1"], .pm-db-calcell[data-heat="2"],
 .pm-db-caldot[data-heat="1"], .pm-db-caldot[data-heat="2"] { color: #0b0b0b; }
 .pm-db-calcell[data-heat="3"], .pm-db-calcell[data-heat="4"], .pm-db-calcell[data-heat="5"],
@@ -318,7 +319,7 @@ body.theme-dark .pm-db-calcell[data-heat="5"], body.theme-dark .pm-db-caldot[dat
 .pm-db-heatscale { display: flex; gap: 3px; }
 .pm-db-heatswatch { width: 13px; height: 13px; border-radius: 3px; }
 
-/* ===== پنل جزئیات روز ===== */
+/* ===== Day detail panel ===== */
 .pm-db-daypanel {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
@@ -332,7 +333,7 @@ body.theme-dark .pm-db-calcell[data-heat="5"], body.theme-dark .pm-db-caldot[dat
 .pm-db-daysub { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .pm-db-daytotal { font-size: 15px; font-weight: 700; color: var(--text-normal); }
 
-/* ===== لیست‌ها ===== */
+/* ===== Lists ===== */
 .pm-db-list { display: flex; flex-direction: column; gap: 2px; }
 .pm-db-item {
   display: flex; align-items: center; gap: 9px;
@@ -361,7 +362,7 @@ body.theme-dark .pm-db-calcell[data-heat="5"], body.theme-dark .pm-db-caldot[dat
   border: 1.5px dashed var(--background-modifier-border); border-radius: 9px;
 }
 
-/* ===== تولتیپ ===== */
+/* ===== Tooltip ===== */
 .pm-db-tip {
   position: absolute; z-index: 60; pointer-events: none; max-width: 260px;
   background: var(--background-secondary);

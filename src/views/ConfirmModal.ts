@@ -1,6 +1,6 @@
 import { App, Modal } from "obsidian";
 
-/** دیالوگ تأیید ساده — اوبسیدین چیز آماده‌ای برای این کار نداره */
+/** A plain confirmation dialog — Obsidian ships nothing for this */
 export class ConfirmModal extends Modal {
   constructor(
     app: App,
@@ -35,7 +35,7 @@ export class ConfirmModal extends Modal {
       this.opts.onConfirm();
     });
 
-    // پیش‌فرض روی Cancel است تا Enterِ اتفاقی چیزی رو پاک نکنه
+    // Cancel takes focus so a stray Enter does not destroy anything
     cancel.focus();
   }
 
