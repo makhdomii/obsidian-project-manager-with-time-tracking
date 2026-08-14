@@ -180,8 +180,11 @@ export default class ProjectManagerPlugin extends Plugin {
   }
 
   async onunload(): Promise<void> {
-    this.app.workspace.detachLeavesOfType(KANBAN_VIEW_TYPE);
-    // The style tag must go with the plugin, or the next load stacks on top of it
+    // Leaves are deliberately not detached here. Obsidian's guidelines are
+    // explicit about it: tearing them down on unload throws away the user's
+    // layout, and the app already disposes views of a disabled plugin.
+    //
+    // The style tag does have to go, though, or the next load stacks on top of it.
     this.styleEl?.remove();
     this.styleEl = null;
   }

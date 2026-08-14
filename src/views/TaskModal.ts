@@ -1,4 +1,4 @@
-import { App, Modal, TFile, TFolder, Notice, Setting } from "obsidian";
+import { App, Modal, TFile, Notice, Setting, normalizePath } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
@@ -47,25 +47,33 @@ export class TaskModal extends Modal {
     }
   }
 
+  /**
+   * Projects offerable for a task: open ones, plus whichever this task already
+   * points at so that editing an old task cannot silently reassign it.
+   *
+   * This used to read `<root>/Projects` directly and reach into the folder's
+   * children through an `any` cast, which ignored a workspace whose projects
+   * folder had been configured elsewhere and leaned on an untyped internal.
+   */
   private getProjectSlugs(): string[] {
-      const projectsPath = `${this.ws.rootFolder}/Projects`;
-      const folder = this.app.vault.getAbstractFileByPath(projectsPath);
-      if (!folder) return [];
+    const folder = normalizePath(this.ws.projectsFolder);
+    const out: string[] = [];
 
-      const children = (folder as any).children;
-      if (!Array.isArray(children)) return [];
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      if (!file.path.startsWith(`${folder}/`)) continue;
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (fm?.type !== "project") continue;
 
-      return children
-          .filter((f: any) => !Array.isArray(f.children) && f.name?.endsWith(".md"))
-          .filter((f: any) => {
-              const slug = (f.name as string).replace(/\.md$/, "");
-              // Always keep this task's own project, even once it leaves todo/active
-              if (slug === this.projectSlug) return true;
-              const status = this.app.metadataCache.getFileCache(f as TFile)?.frontmatter?.status;
-              return TaskModal.ACTIVE_PROJECT_STATUSES.includes(normalizeStatus(status));
-          })
-          .map((f: any) => (f.name as string).replace(/\.md$/, ""))
-          .sort();
+      const slug = file.basename;
+      if (slug === this.projectSlug) {
+        out.push(slug);
+        continue;
+      }
+      if (TaskModal.ACTIVE_PROJECT_STATUSES.includes(normalizeStatus(fm.status))) {
+        out.push(slug);
+      }
+    }
+    return out.sort();
   }
 
   onOpen(): void {
