@@ -31,7 +31,7 @@ export class ChartTooltip {
 
   constructor(private host: HTMLElement) {
     this.el = host.createDiv({ cls: "pm-db-tip" });
-    this.el.style.display = "none";
+    this.el.addClass("is-hidden");
   }
 
   /** Attaches the tooltip to a mark — for the mouse and for keyboard focus alike */
@@ -55,7 +55,7 @@ export class ChartTooltip {
     lines.forEach((line, i) => {
       this.el.createDiv({ cls: i === 0 ? "pm-db-tip-head" : "pm-db-tip-row", text: line });
     });
-    this.el.style.display = "block";
+    this.el.removeClass("is-hidden");
 
     const hostBox = this.host.getBoundingClientRect();
     const markBox = mark.getBoundingClientRect();
@@ -66,11 +66,10 @@ export class ChartTooltip {
     let top = markBox.top - hostBox.top - tipBox.height - 8;
     if (top < 4) top = markBox.bottom - hostBox.top + 8;
 
-    this.el.style.left = `${left}px`;
-    this.el.style.top = `${top}px`;
+    this.el.setCssStyles({ left: `${left}px`, top: `${top}px` });
   }
 
-  hide(): void { this.el.style.display = "none"; }
+  hide(): void { this.el.addClass("is-hidden"); }
 }
 
 // ── Chart card and the table-view toggle ────────────────────────────────
@@ -91,15 +90,15 @@ export function chartCard(parent: HTMLElement, title: string, subtitle?: string)
 
   const body = root.createDiv({ cls: "pm-db-cardbody" });
   const tableWrap = root.createDiv({ cls: "pm-db-tablewrap" });
-  tableWrap.style.display = "none";
+  tableWrap.addClass("is-hidden");
 
   const toggle = head.createEl("button", { cls: "pm-db-toggle", text: "Table" });
   toggle.setAttribute("aria-pressed", "false");
-  toggle.style.display = "none";
+  toggle.addClass("is-hidden");
   toggle.addEventListener("click", () => {
-    const showTable = tableWrap.style.display === "none";
-    tableWrap.style.display = showTable ? "block" : "none";
-    body.style.display = showTable ? "none" : "";
+    const showTable = tableWrap.hasClass("is-hidden");
+    tableWrap.toggleClass("is-hidden", !showTable);
+    body.toggleClass("is-hidden", showTable);
     toggle.textContent = showTable ? "Chart" : "Table";
     toggle.setAttribute("aria-pressed", String(showTable));
   });
@@ -117,7 +116,7 @@ export function chartCard(parent: HTMLElement, title: string, subtitle?: string)
         const tr = tbody.createEl("tr");
         r.forEach((cell) => tr.createEl("td", { text: String(cell) }));
       });
-      toggle.style.display = "";
+      toggle.removeClass("is-hidden");
     },
   };
 }
@@ -184,7 +183,7 @@ export function columnChart(
   const grid = area.createDiv({ cls: "pm-db-grid" });
   [0, 50, 100].forEach((pct) => {
     const line = grid.createDiv({ cls: "pm-db-gridline" });
-    line.style.bottom = `${pct}%`;
+    line.setCssStyles({ bottom: `${pct}%` });
   });
 
   const cols = area.createDiv({ cls: "pm-db-cols" });
@@ -196,10 +195,10 @@ export function columnChart(
     const bar = col.createDiv({ cls: "pm-db-bar" });
     if (p.value <= 0) {
       // A day with nothing logged still leaves a thin trace, so an empty column is
+      // not mistaken for a gap in the data. Its height comes from the class.
       bar.addClass("pm-db-bar-zero");
-      bar.style.height = "2px";
     } else {
-      bar.style.height = `${Math.max(2, (p.value / top) * 100)}%`;
+      bar.setCssStyles({ height: `${Math.max(2, (p.value / top) * 100)}%` });
     }
     tooltip.attach(col, () => p.tipLines);
     if (onSelect) {
@@ -245,7 +244,7 @@ export function barListChart(parent: HTMLElement, rows: BarRow[], tooltip: Chart
     line.createDiv({ cls: "pm-db-blabel", text: row.label });
     const track = line.createDiv({ cls: "pm-db-btrack" });
     const fill = track.createDiv({ cls: "pm-db-bfill" });
-    fill.style.width = `${Math.max(1.5, (row.value / max) * 100)}%`;
+    fill.setCssStyles({ width: `${Math.max(1.5, (row.value / max) * 100)}%` });
     line.createDiv({ cls: "pm-db-bval", text: row.valueText });
 
     tooltip.attach(line, () => row.tipLines);
@@ -279,8 +278,7 @@ export function stackedBar(parent: HTMLElement, segments: StackSegment[], toolti
     for (const seg of segments) {
       if (seg.value <= 0) continue;
       const el = bar.createDiv({ cls: "pm-db-seg" });
-      el.style.flexGrow = String(seg.value);
-      el.style.background = seg.color;
+      el.setCssStyles({ flexGrow: String(seg.value), background: seg.color });
       tooltip.attach(el, () => seg.tipLines);
     }
   }
@@ -290,7 +288,7 @@ export function stackedBar(parent: HTMLElement, segments: StackSegment[], toolti
   for (const seg of segments) {
     const item = legend.createDiv({ cls: "pm-db-legitem" });
     const dot = item.createSpan({ cls: "pm-db-legdot" });
-    dot.style.background = seg.color;
+    dot.setCssStyles({ background: seg.color });
     item.createSpan({ cls: "pm-db-legname", text: seg.label });
     item.createSpan({ cls: "pm-db-legval", text: String(seg.value) });
   }

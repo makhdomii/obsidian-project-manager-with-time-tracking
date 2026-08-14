@@ -74,7 +74,7 @@ export class KanbanView extends ItemView {
 
     for (const status of statuses) {
       const col = board.createDiv({ cls: "pm-kanban-col" });
-      col.style.setProperty("--pm-status-color", statusColor(status));
+      col.setCssProps({ "--pm-status-color": statusColor(status) });
       const colFiltered = tasks.filter((f) => {
         const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
         if (!fm) return false;
@@ -210,7 +210,7 @@ export class KanbanView extends ItemView {
       });
     }
     const prDot = head.createDiv({ cls: "pm-pr-dot" });
-    prDot.style.setProperty("--pm-priority-color", priorityColor(fm.priority ?? "medium"));
+    prDot.setCssProps({ "--pm-priority-color": priorityColor(fm.priority ?? "medium") });
     prDot.setAttribute("aria-label", `Priority: ${fm.priority ?? "medium"}`);
 
     // Meta row — project · due · hours, all on one line

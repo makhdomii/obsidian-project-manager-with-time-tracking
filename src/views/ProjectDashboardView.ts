@@ -410,7 +410,7 @@ export class ProjectDashboardView extends ItemView {
     });
 
     // ── Cards ──
-    const cards = root.createDiv({ cls: "pm-db-cards" });
+    const cards = root.createDiv({ cls: "pm-db-cards pm-db-cards-spaced" });
     this.renderHoursChart(cards, b, inRange, days, perDay);
     this.renderProjectHoursChart(cards, data, inRange);
     this.renderTaskHoursChart(cards, data, inRange, b);
@@ -676,7 +676,7 @@ export class ProjectDashboardView extends ItemView {
   ): void {
     const item = list.createDiv({ cls: "pm-db-item" });
     const dot = item.createDiv({ cls: "pm-db-item-dot" });
-    dot.style.background = opts.color;
+    dot.setCssStyles({ background: opts.color });
     const main = item.createDiv({ cls: "pm-db-item-main" });
     main.createDiv({ cls: "pm-db-item-title", text: opts.title });
     main.createDiv({ cls: "pm-db-item-meta", text: opts.meta });
@@ -775,8 +775,8 @@ export class ProjectDashboardView extends ItemView {
     const fallback = today >= b.from && today <= b.to ? today : busiest;
     this.renderDayPanel(root, data, inPeriod ? (this.selectedDay as string) : fallback);
 
-    const cards = root.createDiv({ cls: "pm-db-cards" });
-    cards.style.marginTop = "14px";
+    const cards = root.createDiv({ cls: "pm-db-cards pm-db-cards-spaced" });
+
     if (this.range !== "week" && this.range !== "month") {
       this.renderMonthlyTotals(cards, data, b);
     }
@@ -930,7 +930,7 @@ export class ProjectDashboardView extends ItemView {
 
     for (const status of this.allStatuses(data.projects.map((p) => p.status))) {
       const col = board.createDiv({ cls: "pm-kanban-col" });
-      col.style.setProperty("--pm-status-color", statusColor(status));
+      col.setCssProps({ "--pm-status-color": statusColor(status) });
       col.createDiv({ cls: "pm-col-strip" });
       const header = col.createDiv({ cls: "pm-col-header" });
       header.createSpan({ cls: "pm-col-title", text: status });
@@ -996,7 +996,7 @@ export class ProjectDashboardView extends ItemView {
       });
     }
     const chip = header.createDiv({ cls: "pm-project-chip", text: project.status });
-    chip.style.setProperty("--pm-status-color", statusColor(project.status));
+    chip.setCssProps({ "--pm-status-color": statusColor(project.status) });
 
     const meta = card.createDiv({ cls: "pm-project-meta" });
     meta.createDiv({ cls: "pm-project-stat", text: `Due: ${project.due || "—"}` });

@@ -16,7 +16,6 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Project Manager Settings" });
 
     // Default workspace
     new Setting(containerEl)
@@ -79,11 +78,11 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
       );
 
     // Workspaces
-    containerEl.createEl("h3", { text: "Workspaces" });
+    new Setting(containerEl).setName("Workspaces").setHeading();
 
     this.plugin.settings.workspaces.forEach((ws, index) => {
       const wsContainer = containerEl.createDiv({ cls: "pm-workspace-setting" });
-      wsContainer.createEl("h4", { text: ws.name });
+      new Setting(wsContainer).setName(ws.name).setHeading();
 
       new Setting(wsContainer)
         .setName("Workspace name")
@@ -199,7 +198,7 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
     );
 
     // Statuses
-    containerEl.createEl("h3", { text: "Task Statuses" });
+    new Setting(containerEl).setName("Task Statuses").setHeading();
     new Setting(containerEl)
       .setName("Statuses")
       .setDesc("Comma-separated list")
@@ -213,7 +212,7 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
       );
 
     // Priorities
-    containerEl.createEl("h3", { text: "Priorities" });
+    new Setting(containerEl).setName("Priorities").setHeading();
     new Setting(containerEl)
       .setName("Priorities")
       .setDesc("Comma-separated list")
