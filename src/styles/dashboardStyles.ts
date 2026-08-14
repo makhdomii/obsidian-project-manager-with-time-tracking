@@ -257,7 +257,9 @@ body.theme-dark {
 .pm-db-legval { color: var(--text-normal); font-weight: 650; font-variant-numeric: tabular-nums; }
 
 /* ===== Calendar ===== */
-.pm-db-cal { direction: rtl; }
+/* Direction comes from the dir attribute renderCalendar sets, so a Gregorian
+   calendar stays left-to-right even inside a right-to-left vault. This used to
+   be a hard direction:rtl here, which as an author rule beat the attribute. */
 .pm-db-cal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
 .pm-db-calmtitle {
   font-size: 12px; font-weight: 650; color: var(--text-normal); margin-bottom: 7px; text-align: center;

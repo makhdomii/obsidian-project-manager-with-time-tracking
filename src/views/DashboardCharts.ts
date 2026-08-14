@@ -327,6 +327,13 @@ export interface CalendarOptions {
 
 export function renderCalendar(parent: HTMLElement, opts: CalendarOptions): void {
   const wrap = parent.createDiv({ cls: `pm-db-cal pm-db-cal-${opts.mode}` });
+
+  // The grid inherited the vault's text direction, so in a right-to-left vault
+  // a Gregorian calendar came out mirrored: Fri Thu Wed reading left to right,
+  // and the first of the month in the top-right corner. Direction belongs to
+  // the calendar being drawn, not to the vault it is drawn in.
+  wrap.setAttribute("dir", opts.cal.kind === "jalali" ? "rtl" : "ltr");
+
   if (opts.mode === "dots") renderCalDots(wrap, opts);
   else if (opts.mode === "heatmap") renderCalHeatmap(wrap, opts);
   else renderCalGrid(wrap, opts);
