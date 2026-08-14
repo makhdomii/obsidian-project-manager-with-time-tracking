@@ -2,7 +2,7 @@
 
 *[فارسی](README.fa.md)*
 
-Plan projects and tasks as ordinary Markdown notes, track time against them, and see where that time actually went. Works in the Gregorian or the Jalali (Persian) calendar.
+Plan projects and tasks as ordinary Markdown notes, track time against them, and see where that time actually went. Works in the Gregorian or the Jalali (Shamsi/Persian) calendar.
 
 Everything lives in your vault as plain notes with frontmatter. There is no database and no lock-in: delete the plugin and your projects and tasks are still readable files.
 
@@ -30,7 +30,7 @@ Every period can be stepped backwards and forwards, so past months and years are
 
 **Workspaces.** Separate sets of folders — work and personal, say — each with its own projects, tasks, time entries and archive.
 
-**Calendar.** Gregorian or Jalali, with the week starting on whichever day you use. Month grouping, week boundaries, seasons and quarters, digits and labels all follow the choice.
+**Calendar.** Gregorian or Jalali (Shamsi/Persian), with the week starting on whichever day you use. Month grouping, week boundaries, seasons and quarters, digits and labels all follow the choice.
 
 ## Getting started
 
