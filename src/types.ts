@@ -1,3 +1,5 @@
+import { CalendarKind, WeekStart } from "./utils/Calendar";
+
 export interface Workspace {
   id: string;
   name: string;
@@ -19,6 +21,10 @@ export interface ProjectManagerSettings {
   dateFormat: string;
   statuses: string[];
   priorities: string[];
+  /** Which calendar the dashboard counts and labels in */
+  calendar: CalendarKind;
+  /** Which day a week starts on; "auto" follows the calendar's own custom */
+  weekStart: WeekStart;
 }
 
 export const DEFAULT_SETTINGS: ProjectManagerSettings = {
@@ -37,6 +43,8 @@ export const DEFAULT_SETTINGS: ProjectManagerSettings = {
   dateFormat: "YYYY-MM-DD",
   statuses: ["todo", "active", "done", "cancel", "quite"],
   priorities: ["low", "medium", "high", "critical"],
+  calendar: "gregorian",
+  weekStart: "auto",
 };
 
 export interface ProjectFrontmatter {

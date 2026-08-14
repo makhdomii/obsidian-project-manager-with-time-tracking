@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, Modal, ButtonComponent, Notice } from "
 import ProjectManagerPlugin from "./main";
 import { Workspace, DEFAULT_SETTINGS } from "./types";
 import { defaultArchiveFolder } from "./utils/WorkspacePaths";
+import { CalendarKind, WeekStart } from "./utils/Calendar";
 
 export class ProjectManagerSettingTab extends PluginSettingTab {
   plugin: ProjectManagerPlugin;
@@ -29,6 +30,37 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
         drop.onChange(async (value) => {
           this.plugin.settings.defaultWorkspaceId = value;
           await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Calendar")
+      .setDesc("Which calendar the dashboard, the overview and the reports count and label in.")
+      .addDropdown((drop) => {
+        drop.addOption("gregorian", "Gregorian");
+        drop.addOption("jalali", "Jalali (Persian)");
+        drop.setValue(this.plugin.settings.calendar);
+        drop.onChange(async (value) => {
+          this.plugin.settings.calendar = value as CalendarKind;
+          await this.plugin.saveSettings();
+          this.plugin.refreshTimerViews();
+          this.display();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Week starts on")
+      .setDesc("Default follows the calendar — Saturday for Jalali, Monday for Gregorian.")
+      .addDropdown((drop) => {
+        drop.addOption("auto", "Default for the calendar");
+        drop.addOption("sat", "Saturday");
+        drop.addOption("sun", "Sunday");
+        drop.addOption("mon", "Monday");
+        drop.setValue(this.plugin.settings.weekStart);
+        drop.onChange(async (value) => {
+          this.plugin.settings.weekStart = value as WeekStart;
+          await this.plugin.saveSettings();
+          this.plugin.refreshTimerViews();
         });
       });
 

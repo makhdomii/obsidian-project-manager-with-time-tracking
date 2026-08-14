@@ -13,13 +13,9 @@ import {
 import {
   BarRow, CalendarMode, ChartTooltip, ColumnPoint, StackSegment,
   barListChart, chartCard, columnChart, formatHours, formatNumber, heatLegend,
-  heroFigure, jalaliDayTitle, renderCalendar, stackedBar, statTile,
+  dayTitle, heroFigure, renderCalendar, stackedBar, statTile,
 } from "./DashboardCharts";
-import {
-  addDays, daysBetween, groupByJalaliMonth, isoToJalali, jalaliLabel, jalaliMonthLabel,
-  jalaliMonthLength, jalaliToISO, rangeDays, seasonName, shiftJalaliMonths, startOfJalaliMonth,
-  startOfJalaliSeason, startOfJalaliWeek, startOfJalaliYear, todayISO, toPersianDigits,
-} from "../utils/Jalali";
+import { addDays, daysBetween, rangeDays, todayISO } from "../utils/Jalali";
 
 export const PROJECT_DASHBOARD_VIEW_TYPE = "project-manager-project-dashboard";
 
@@ -240,13 +236,14 @@ export class ProjectDashboardView extends ItemView {
 
   /** Period label without needing data — required before collect runs */
   private periodLabel(): string {
-    const { jy, jm } = isoToJalali(this.anchor);
+    const cal = this.plugin.calendar;
+    const { y, m } = cal.fromISO(this.anchor);
     switch (this.range) {
-      case "week": return `هفته‌ی ${jalaliLabel(startOfJalaliWeek(this.anchor))}`;
-      case "season": return `${seasonName(jm)} ${toPersianDigits(jy)}`;
-      case "year": return `سال ${toPersianDigits(jy)}`;
+      case "week": return cal.weekLabel(cal.startOfWeek(this.anchor));
+      case "season": return cal.seasonLabel(this.anchor);
+      case "year": return cal.yearLabel(this.anchor);
       case "all": return "All time";
-      default: return jalaliMonthLabel(jy, jm);
+      default: return cal.monthLabel(y, m);
     }
   }
 
@@ -255,7 +252,7 @@ export class ProjectDashboardView extends ItemView {
       this.anchor = addDays(this.anchor, dir * 7);
     } else {
       const step = this.range === "season" ? 3 : this.range === "year" ? 12 : 1;
-      this.anchor = shiftJalaliMonths(this.anchor, dir * step);
+      this.anchor = this.plugin.calendar.shiftMonths(this.anchor, dir * step);
     }
     this.selectedDay = null;
     this.scrollTop = 0;
@@ -284,7 +281,8 @@ export class ProjectDashboardView extends ItemView {
   private bounds(data: AnalyticsData): RangeBounds {
     const today = todayISO();
     const anchor = this.anchor;
-    const { jy, jm } = isoToJalali(anchor);
+    const cal = this.plugin.calendar;
+    const { y: jy, m: jm } = cal.fromISO(anchor);
     let from: string;
     let to: string;
     let label: string;
@@ -292,38 +290,38 @@ export class ProjectDashboardView extends ItemView {
 
     switch (this.range) {
       case "week": {
-        from = startOfJalaliWeek(anchor);
+        from = cal.startOfWeek(anchor);
         to = addDays(from, 6);
-        label = `هفته‌ی ${jalaliLabel(from)}`;
+        label = cal.weekLabel(from);
         calMode = "dots";
         break;
       }
       case "season": {
-        from = startOfJalaliSeason(anchor);
+        from = cal.startOfSeason(anchor);
         const lastMonth = Math.floor((jm - 1) / 3) * 3 + 3;
-        to = jalaliToISO(jy, lastMonth, jalaliMonthLength(jy, lastMonth));
-        label = `${seasonName(jm)} ${toPersianDigits(jy)}`;
+        to = cal.toISO(jy, lastMonth, cal.monthLength(jy, lastMonth));
+        label = cal.seasonLabel(anchor);
         calMode = "grid";
         break;
       }
       case "year": {
-        from = startOfJalaliYear(anchor);
-        to = jalaliToISO(jy, 12, jalaliMonthLength(jy, 12));
-        label = `سال ${toPersianDigits(jy)}`;
+        from = cal.startOfYear(anchor);
+        to = cal.toISO(jy, 12, cal.monthLength(jy, 12));
+        label = cal.yearLabel(anchor);
         calMode = "heatmap";
         break;
       }
       case "all": {
-        from = data.firstISO ?? startOfJalaliYear(today);
+        from = data.firstISO ?? cal.startOfYear(today);
         to = data.lastISO && data.lastISO > today ? data.lastISO : today;
         label = "All time";
         calMode = "heatmap";
         break;
       }
       default: {
-        from = startOfJalaliMonth(anchor);
-        to = jalaliToISO(jy, jm, jalaliMonthLength(jy, jm));
-        label = jalaliMonthLabel(jy, jm);
+        from = cal.startOfMonth(anchor);
+        to = cal.toISO(jy, jm, cal.monthLength(jy, jm));
+        label = cal.monthLabel(jy, jm);
         calMode = "grid";
       }
     }
@@ -365,7 +363,7 @@ export class ProjectDashboardView extends ItemView {
       label: `Time tracked · ${b.label}`,
       value: formatNumber(total),
       unit: "hours",
-      sub: `${b.from} → ${b.effTo}  ·  ${jalaliLabel(b.from)} تا ${jalaliLabel(b.effTo)}`,
+      sub: `${b.from} → ${b.effTo}  ·  ${this.plugin.calendar.rangeLabel(b.from, b.effTo)}`,
       delta: prevTotal > 0 || total > 0
         ? {
             text: `${formatHours(Math.abs(diff))} vs previous ${days.length}d`,
@@ -428,20 +426,20 @@ export class ProjectDashboardView extends ItemView {
     if (weekly) {
       const buckets = new Map<string, { start: string; end: string; hours: number }>();
       for (const iso of days) {
-        const start = startOfJalaliWeek(iso);
+        const start = this.plugin.calendar.startOfWeek(iso);
         const bucket = buckets.get(start) ?? { start, end: iso, hours: 0 };
         bucket.end = iso;
         bucket.hours += perDay.get(iso) ?? 0;
         buckets.set(start, bucket);
       }
       for (const bucket of buckets.values()) {
-        const { jd, jm } = isoToJalali(bucket.start);
+        const { d: jd, m: jm } = this.plugin.calendar.fromISO(bucket.start);
         points.push({
           key: bucket.start,
-          axisLabel: toPersianDigits(jd),
+          axisLabel: this.plugin.calendar.digits(jd),
           value: Math.round(bucket.hours * 100) / 100,
           tipLines: [
-            `هفته‌ی ${jalaliLabel(bucket.start)}`,
+            this.plugin.calendar.weekLabel(bucket.start),
             `${formatHours(bucket.hours)} tracked`,
             `${bucket.start} → ${bucket.end}`,
           ],
@@ -452,9 +450,9 @@ export class ProjectDashboardView extends ItemView {
         const hours = perDay.get(iso) ?? 0;
         points.push({
           key: iso,
-          axisLabel: toPersianDigits(isoToJalali(iso).jd),
+          axisLabel: this.plugin.calendar.digits(this.plugin.calendar.fromISO(iso).d),
           value: hours,
-          tipLines: [jalaliDayTitle(iso), `${formatHours(hours)} tracked`, iso],
+          tipLines: [dayTitle(this.plugin.calendar, iso), `${formatHours(hours)} tracked`, iso],
         });
       }
     }
@@ -481,7 +479,7 @@ export class ProjectDashboardView extends ItemView {
     card.setTable(
       ["Date (Jalali)", "Date", "Hours"],
       points.map((p) => [
-        weekly ? `هفته‌ی ${jalaliLabel(p.key)}` : jalaliLabel(p.key),
+        weekly ? this.plugin.calendar.weekLabel(p.key) : this.plugin.calendar.label(p.key),
         p.key,
         formatHours(p.value),
       ])
@@ -634,7 +632,7 @@ export class ProjectDashboardView extends ItemView {
 
     card.setTable(
       ["Task", "Due", "Due (Jalali)", "Priority", "Status"],
-      dated.map((t) => [t.title, t.due, jalaliLabel(t.due), t.priority, t.status])
+      dated.map((t) => [t.title, t.due, this.plugin.calendar.label(t.due), t.priority, t.status])
     );
   }
 
@@ -653,7 +651,7 @@ export class ProjectDashboardView extends ItemView {
       this.renderListItem(list, {
         color: task ? statusColor(task.status) : "var(--text-faint)",
         title: rec.taskTitle,
-        meta: `${jalaliLabel(rec.iso)} · ${rec.projectSlug || "no project"}`,
+        meta: `${this.plugin.calendar.label(rec.iso)} · ${rec.projectSlug || "no project"}`,
         value: formatHours(rec.hours),
         onClick: () => {
           if (task) this.plugin.openTaskModal(task.file, this.currentWorkspace);
@@ -663,7 +661,7 @@ export class ProjectDashboardView extends ItemView {
 
     card.setTable(
       ["Date", "Date (Jalali)", "Task", "Hours"],
-      [...inRange].reverse().map((r) => [r.iso, jalaliLabel(r.iso), r.taskTitle, formatHours(r.hours)])
+      [...inRange].reverse().map((r) => [r.iso, this.plugin.calendar.label(r.iso), r.taskTitle, formatHours(r.hours)])
     );
   }
 
@@ -718,7 +716,7 @@ export class ProjectDashboardView extends ItemView {
       label: "Busiest day",
       value: formatNumber(perDay.get(busiest) ?? 0),
       unit: "h",
-      sub: (perDay.get(busiest) ?? 0) > 0 ? jalaliLabel(busiest) : "nothing logged yet",
+      sub: (perDay.get(busiest) ?? 0) > 0 ? this.plugin.calendar.label(busiest) : "nothing logged yet",
     });
     statTile(tiles, {
       label: "Current streak",
@@ -740,6 +738,7 @@ export class ProjectDashboardView extends ItemView {
     card.root.addClass("pm-db-wide");
 
     renderCalendar(card.body, {
+      cal: this.plugin.calendar,
       days,
       hoursByDay: perDay,
       todayISO: today,
@@ -758,8 +757,8 @@ export class ProjectDashboardView extends ItemView {
       ["Date", "Date (Jalali)", "Weekday", "Hours", "Tasks"],
       days.map((iso) => [
         iso,
-        jalaliLabel(iso),
-        jalaliDayTitle(iso).split("،")[0],
+        this.plugin.calendar.label(iso),
+        this.plugin.calendar.weekdayLabel(iso),
         formatHours(perDay.get(iso) ?? 0),
         (data.byDay.get(iso) ?? []).map((r) => r.taskTitle).join(", ") || "—",
       ])
@@ -781,7 +780,8 @@ export class ProjectDashboardView extends ItemView {
 
   /** Per Jalali month totals — for the seasonal and yearly views, jumping to a month */
   private renderMonthlyTotals(parent: HTMLElement, data: AnalyticsData, b: RangeBounds): void {
-    const groups = groupByJalaliMonth(rangeDays(b.from, b.to));
+    const cal = this.plugin.calendar;
+    const groups = cal.groupByMonth(rangeDays(b.from, b.to));
     const card = chartCard(parent, "Hours per month", `${b.label} · click a month to open it`);
 
     const rows: BarRow[] = [];
@@ -793,7 +793,7 @@ export class ProjectDashboardView extends ItemView {
       const worked = recs.filter((r) => r.hours > 0);
       const dayCount = new Set(worked.map((r) => r.iso)).size;
       const taskCount = new Set(worked.map((r) => r.taskSlug)).size;
-      const label = jalaliMonthLabel(g.jy, g.jm);
+      const label = cal.monthLabel(g.y, g.m);
 
       rows.push({
         label,
@@ -802,7 +802,7 @@ export class ProjectDashboardView extends ItemView {
         tipLines: [label, `${formatHours(hours)} over ${dayCount} days`, `${taskCount} tasks`],
         onClick: () => {
           this.range = "month";
-          this.anchor = jalaliToISO(g.jy, g.jm, 1);
+          this.anchor = cal.toISO(g.y, g.m, 1);
           this.selectedDay = null;
           this.scrollTop = 0;
           void this.render();
@@ -867,7 +867,7 @@ export class ProjectDashboardView extends ItemView {
   }
 
   private dayTip(iso: string, data: AnalyticsData, hours: number): string[] {
-    const lines = [jalaliDayTitle(iso), `${formatHours(hours)} tracked`];
+    const lines = [dayTitle(this.plugin.calendar, iso), `${formatHours(hours)} tracked`];
     const records = data.byDay.get(iso) ?? [];
     for (const rec of records.slice(0, 4)) {
       lines.push(`• ${rec.taskTitle} — ${formatHours(rec.hours)}`);
@@ -884,7 +884,7 @@ export class ProjectDashboardView extends ItemView {
 
     const head = panel.createDiv({ cls: "pm-db-dayhead" });
     const left = head.createDiv();
-    left.createDiv({ cls: "pm-db-daytitle", text: jalaliDayTitle(iso) });
+    left.createDiv({ cls: "pm-db-daytitle", text: dayTitle(this.plugin.calendar, iso) });
     left.createDiv({ cls: "pm-db-daysub", text: iso });
     head.createDiv({ cls: "pm-db-daytotal", text: formatHours(total) });
 

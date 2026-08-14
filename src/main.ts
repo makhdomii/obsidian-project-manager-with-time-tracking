@@ -12,6 +12,7 @@ import { ProjectModal } from "./views/ProjectModal";
 import { AnalyticsManager } from "./managers/AnalyticsManager";
 import { ArchiveManager } from "./managers/ArchiveManager";
 import { ProjectManagerApi, createApi } from "./api";
+import { Calendar, createCalendar } from "./utils/Calendar";
 import { defaultArchiveFolder } from "./utils/WorkspacePaths";
 import { NoteScanner } from "./utils/NoteContent";
 import { DASHBOARD_STYLES } from "./styles/dashboardStyles";
@@ -28,6 +29,8 @@ export default class ProjectManagerPlugin extends Plugin {
   archiveManager: ArchiveManager;
   /** Public surface for other plugins — see src/api.ts */
   api: ProjectManagerApi;
+  /** Jalali or Gregorian, per settings. Rebuilt whenever those change. */
+  calendar: Calendar;
   private styleEl: HTMLStyleElement | null = null;
   /** Raw timer from data.json — held until timeTracker has been constructed */
   private persistedTimer: unknown = null;
@@ -44,6 +47,7 @@ export default class ProjectManagerPlugin extends Plugin {
     this.noteScanner = new NoteScanner(this.app);
     this.archiveManager = new ArchiveManager(this.app, this.workspaceManager);
     this.api = createApi(this);
+    this.rebuildCalendar();
 
     this.restoreTimer();
     await this.migrateStatusNames();
@@ -193,6 +197,14 @@ export default class ProjectManagerPlugin extends Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, settings);
     this.persistedTimer = activeTimer ?? null;
 
+    // New installs default to Gregorian, which suits most people. But everything
+    // that existed before this setting was Jalali-only, so an existing vault
+    // keeps Jalali rather than silently switching calendars under the user.
+    const isUpgrade = Object.keys(settings).length > 0;
+    if (isUpgrade && settings.calendar === undefined) {
+      this.settings.calendar = "jalali";
+    }
+
     // Workspaces created before archiving existed do not carry this key
     for (const ws of this.settings.workspaces) {
       if (!ws.archiveFolder) ws.archiveFolder = defaultArchiveFolder(ws.rootFolder);
@@ -205,7 +217,16 @@ export default class ProjectManagerPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
+    // The calendar is derived from settings, so it has to be rebuilt before any
+    // view re-reads it — otherwise switching calendars appears to do nothing
+    // until the next reload.
+    this.rebuildCalendar();
     await this.savePluginData();
+  }
+
+  /** One calendar object shared by every view, so they cannot disagree */
+  rebuildCalendar(): void {
+    this.calendar = createCalendar(this.settings.calendar, this.settings.weekStart);
   }
 
   /**

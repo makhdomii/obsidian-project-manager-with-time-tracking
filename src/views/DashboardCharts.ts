@@ -5,11 +5,7 @@
 // ║  and a tooltip is never the only way to read a number.               ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
-import {
-  MONTHS_SHORT_FA, WEEKDAYS_FA, groupByJalaliMonth, isoToJalali,
-  jalaliFirstWeekdayCol, jalaliLabel, jalaliMonthLabel, toPersianDigits,
-  weekdayCol, weekdayLabel,
-} from "../utils/Jalali";
+import { Calendar } from "../utils/Calendar";
 
 // ── Number formatting ───────────────────────────────────────────────────
 
@@ -296,7 +292,7 @@ export function stackedBar(parent: HTMLElement, segments: StackSegment[], toolti
   }
 }
 
-// ── Jalali calendar ─────────────────────────────────────────────────────
+// ── Calendar ────────────────────────────────────────────────────────────
 // Three modes, exactly like the vault's HabitCalendar: weekly (dots), monthly and
 // seasonal (grid), yearly (heatmap). Colour is intensity, from the pm-heat ramp.
 
@@ -313,6 +309,8 @@ export function heatBin(hours: number): number {
 }
 
 export interface CalendarOptions {
+  /** Which calendar to draw in — the whole widget follows it */
+  cal: Calendar;
   days: string[];
   hoursByDay: Map<string, number>;
   todayISO: string;
@@ -346,47 +344,47 @@ function renderCalDots(wrap: HTMLElement, opts: CalendarOptions): void {
   const row = wrap.createDiv({ cls: "pm-db-caldays" });
   for (const iso of opts.days) {
     const day = row.createDiv({ cls: "pm-db-calday" });
-    day.createDiv({ cls: "pm-db-caldn", text: WEEKDAYS_FA[weekdayCol(iso)] });
+    day.createDiv({ cls: "pm-db-caldn", text: opts.cal.weekdaysShort[opts.cal.weekdayCol(iso)] });
     const dot = day.createDiv({ cls: "pm-db-caldot" });
     const hours = opts.hoursByDay.get(iso) ?? 0;
     dot.textContent = hours > 0 ? formatHours(hours).replace(/\s.*/, "") : "–";
     applyCell(dot, iso, opts);
-    day.createDiv({ cls: "pm-db-caldd", text: toPersianDigits(isoToJalali(iso).jd) });
+    day.createDiv({ cls: "pm-db-caldd", text: opts.cal.digits(opts.cal.fromISO(iso).d) });
   }
 }
 
 function renderCalGrid(wrap: HTMLElement, opts: CalendarOptions): void {
-  for (const group of groupByJalaliMonth(opts.days)) {
+  for (const group of opts.cal.groupByMonth(opts.days)) {
     const section = wrap.createDiv({ cls: "pm-db-calmonth" });
-    section.createDiv({ cls: "pm-db-calmtitle", text: jalaliMonthLabel(group.jy, group.jm) });
+    section.createDiv({ cls: "pm-db-calmtitle", text: opts.cal.monthLabel(group.y, group.m) });
 
     const hdr = section.createDiv({ cls: "pm-db-calhdr" });
-    WEEKDAYS_FA.forEach((d) => hdr.createDiv({ cls: "pm-db-calwday", text: d }));
+    opts.cal.weekdaysShort.forEach((d) => hdr.createDiv({ cls: "pm-db-calwday", text: d }));
 
     const grid = section.createDiv({ cls: "pm-db-calgrid" });
-    const startCol = jalaliFirstWeekdayCol(group.jy, group.jm);
+    const startCol = opts.cal.firstWeekdayCol(group.y, group.m);
     // If the range starts mid-month, only run up to the first day present
-    const firstJd = isoToJalali(group.isos[0]).jd;
-    const lead = (startCol + firstJd - 1) % 7;
+    const firstDay = opts.cal.fromISO(group.isos[0]).d;
+    const lead = (startCol + firstDay - 1) % 7;
     for (let i = 0; i < lead; i++) grid.createDiv({ cls: "pm-db-calcell is-empty" });
 
     for (const iso of group.isos) {
       const cell = grid.createDiv({ cls: "pm-db-calcell" });
-      cell.textContent = toPersianDigits(isoToJalali(iso).jd);
+      cell.textContent = opts.cal.digits(opts.cal.fromISO(iso).d);
       applyCell(cell, iso, opts);
     }
   }
 }
 
 function renderCalHeatmap(wrap: HTMLElement, opts: CalendarOptions): void {
-  for (const group of groupByJalaliMonth(opts.days)) {
+  for (const group of opts.cal.groupByMonth(opts.days)) {
     const row = wrap.createDiv({ cls: "pm-db-hmrow" });
-    row.createDiv({ cls: "pm-db-hmlbl", text: MONTHS_SHORT_FA[group.jm - 1] });
+    row.createDiv({ cls: "pm-db-hmlbl", text: opts.cal.monthsShort[group.m - 1] });
     const cells = row.createDiv({ cls: "pm-db-hmcells" });
 
-    const startCol = jalaliFirstWeekdayCol(group.jy, group.jm);
-    const firstJd = isoToJalali(group.isos[0]).jd;
-    const lead = (startCol + firstJd - 1) % 7;
+    const startCol = opts.cal.firstWeekdayCol(group.y, group.m);
+    const firstDay = opts.cal.fromISO(group.isos[0]).d;
+    const lead = (startCol + firstDay - 1) % 7;
     for (let i = 0; i < lead; i++) cells.createDiv({ cls: "pm-db-hmcell is-empty" });
 
     for (const iso of group.isos) {
@@ -411,6 +409,6 @@ export function heatLegend(parent: HTMLElement): void {
   legend.createSpan({ cls: "pm-db-heatlabel", text: "More" });
 }
 
-export function jalaliDayTitle(iso: string): string {
-  return `${weekdayLabel(iso)}، ${jalaliLabel(iso)}`;
+export function dayTitle(cal: Calendar, iso: string): string {
+  return cal.dayTitle(iso);
 }
