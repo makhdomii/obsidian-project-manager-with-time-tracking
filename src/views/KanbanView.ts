@@ -139,6 +139,44 @@ export class KanbanView extends ItemView {
     }
   }
 
+  /**
+   * Finds task files Obsidian's index disagrees with disk about, and makes it
+   * re-read them.
+   *
+   * When something writes to the vault behind Obsidian's back — a git discard,
+   * a pull, an editor outside the app — Obsidian can go on serving the metadata
+   * it parsed before, and no plugin event ever fires. The board then shows the
+   * old title until the note is opened, which is what finally forces a re-read.
+   *
+   * Comparing the adapter's mtime with the one on the cached file object is how
+   * that disagreement becomes visible. Writing the content straight back
+   * through the vault is what resolves it: the read comes from disk, so the
+   * index is rebuilt from what is actually there. The bytes are unchanged, so
+   * git sees nothing; only the modification time moves.
+   */
+  private async reindexStaleFiles(): Promise<number> {
+    const files = await this.plugin.taskManager.getTasks(this.currentWorkspace);
+    let stale = 0;
+
+    for (const file of files) {
+      let onDisk: { mtime: number } | null = null;
+      try {
+        onDisk = await this.app.vault.adapter.stat(file.path);
+      } catch {
+        continue; // gone or unreadable — the next render will drop it
+      }
+      if (!onDisk || onDisk.mtime === file.stat.mtime) continue;
+
+      stale++;
+      try {
+        await this.app.vault.process(file, (content) => content);
+      } catch {
+        // Locked or read-only; the count still tells the user what is going on
+      }
+    }
+    return stale;
+  }
+
   renderTaskCard(container: HTMLElement, file: TFile, status: string): void {
     const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
     const card = container.createDiv({ cls: "pm-task-card" });
@@ -314,6 +352,25 @@ export class KanbanView extends ItemView {
       .addEventListener("click", () => {
         this.plugin.openProjectDashboard();
       });
+
+    // A way out when a card is showing something stale. The board redraws on
+    // metadata events, but a file changed outside Obsidian — a git discard, a
+    // pull — is only noticed once Obsidian itself re-indexes it, and nothing a
+    // plugin can do forces that. Reload re-reads the files and says so plainly.
+    const reload = toolbar.createEl("button", {
+      cls: "pm-btn pm-btn-secondary",
+      text: "↻ Reload",
+      attr: { "aria-label": "Re-read the task files and redraw the board" },
+    });
+    reload.addEventListener("click", async () => {
+      const stale = await this.reindexStaleFiles();
+      await this.render();
+      new Notice(
+        stale > 0
+          ? `Board reloaded — ${stale} file(s) had changed outside Obsidian`
+          : "Board reloaded"
+      );
+    });
 
     // Active timer display
     renderTimerBar(toolbar, this.plugin, this.currentWorkspace, () => void this.render());

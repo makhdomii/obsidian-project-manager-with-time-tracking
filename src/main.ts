@@ -334,7 +334,14 @@ export default class ProjectManagerPlugin extends Plugin {
     else if (type === "task") await this.archiveManager.syncTask(ws, file);
   }
 
-  /** Waits for this file's metadata cache to refresh, with a time limit */
+  /**
+   * Waits for this file's metadata cache to catch up after a write.
+   *
+   * The event almost always lands within a few milliseconds, so the timeout is
+   * only there so a missed event cannot hang the save. It used to be 400ms,
+   * which on a slower vault expired first and let the caller read the values
+   * that were there before the write.
+   */
   private nextMetadataTick(file: TFile): Promise<void> {
     return new Promise((resolve) => {
       let done = false;
@@ -347,7 +354,7 @@ export default class ProjectManagerPlugin extends Plugin {
       const ref = this.app.metadataCache.on("changed", (changed) => {
         if (changed.path === file.path) finish();
       });
-      window.setTimeout(finish, 400);
+      window.setTimeout(finish, 2000);
     });
   }
 
