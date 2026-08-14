@@ -9,6 +9,7 @@ import { App, TFile } from "obsidian";
 import { Workspace } from "../types";
 import { toISODate, todayISO, addDays, daysBetween } from "../utils/Jalali";
 import { normalizeStatus } from "../utils/StatusColors";
+import { linkSlug } from "../utils/FrontmatterUtils";
 import {
   isArchivedPath, isUnderAnyFolder, projectFolders, taskFolders, timeEntryFolders,
 } from "../utils/WorkspacePaths";
@@ -72,7 +73,7 @@ export function isDoneStatus(status: string): boolean { return DONE_STATUSES.has
 export function isClosedStatus(status: string): boolean { return CLOSED_STATUSES.has(status); }
 
 function unlink(value: unknown): string {
-  return String(value ?? "").replace(/^\[\[|\]\]$/g, "").trim();
+  return linkSlug(value);
 }
 
 export class AnalyticsManager {

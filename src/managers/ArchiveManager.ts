@@ -1,6 +1,7 @@
 import { App, TFile, normalizePath } from "obsidian";
 import { Workspace } from "../types";
 import { normalizeStatus } from "../utils/StatusColors";
+import { linkSlug } from "../utils/FrontmatterUtils";
 import { WorkspaceManager } from "./WorkspaceManager";
 import {
   archiveEnabled, archiveProjectsFolder, archiveTasksFolder, archiveTimeEntriesFolder,
@@ -139,7 +140,7 @@ export class ArchiveManager {
       if (!folders.some((f) => file.path.startsWith(`${f}/`))) continue;
       const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
       if (fm?.type !== type) continue;
-      const wsName = String(fm.workspace ?? "").replace(/^\[\[|\]\]$/g, "").trim();
+      const wsName = linkSlug(fm.workspace);
       if (wsName && wsName !== ws.name) continue;
       out.push(file);
     }
@@ -149,8 +150,7 @@ export class ArchiveManager {
   private tasksOfProject(ws: Workspace, projectSlug: string): TFile[] {
     return this.filesIn(taskFolders(ws), "task", ws).filter((f) => {
       const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
-      const link = String(fm?.project ?? "").replace(/^\[\[|\]\]$/g, "").trim();
-      return link === projectSlug;
+      return linkSlug(fm?.project) === projectSlug;
     });
   }
 
@@ -171,8 +171,7 @@ export class ArchiveManager {
       if (isArchivedPath(ws, file.path) === toArchive) continue;
 
       const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
-      const link = String(fm?.task ?? "").replace(/^\[\[|\]\]$/g, "").trim();
-      if (link !== taskSlug) continue;
+      if (linkSlug(fm?.task) !== taskSlug) continue;
 
       await this.moveFile(file, target);
       count++;

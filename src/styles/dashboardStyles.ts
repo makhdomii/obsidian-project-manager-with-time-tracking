@@ -256,7 +256,7 @@ body.theme-dark {
 .pm-db-legname { color: var(--text-muted); }
 .pm-db-legval { color: var(--text-normal); font-weight: 650; font-variant-numeric: tabular-nums; }
 
-/* ===== Jalali calendar ===== */
+/* ===== Calendar ===== */
 .pm-db-cal { direction: rtl; }
 .pm-db-cal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
 .pm-db-calmtitle {
@@ -360,6 +360,13 @@ body.theme-dark .pm-db-calcell[data-heat="5"], body.theme-dark .pm-db-caldot[dat
 .pm-db-empty {
   padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-faint);
   border: 1.5px dashed var(--background-modifier-border); border-radius: 9px;
+}
+
+/* Reachable by screen readers, invisible on screen. Used instead of aria-label
+   so Obsidian does not add a second tooltip over the chart's own. */
+.pm-db-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
 /* ===== Tooltip ===== */

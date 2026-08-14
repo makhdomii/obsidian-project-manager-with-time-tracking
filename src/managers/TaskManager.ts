@@ -1,6 +1,6 @@
 import { App, TFile, normalizePath } from "obsidian";
 import { Workspace, TaskFrontmatter } from "../types";
-import { slugify, yamlString } from "../utils/FrontmatterUtils";
+import { linkSlug, slugify, yamlString } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 import { isUnderAnyFolder, taskFolders } from "../utils/WorkspacePaths";
 
@@ -76,7 +76,7 @@ ${extraLines}---
     for (const file of files) {
       if (!isUnderAnyFolder(file.path, folders)) continue;
       const cache = this.app.metadataCache.getFileCache(file);
-      if (cache?.frontmatter?.type === "task" && cache?.frontmatter?.workspace === `[[${ws.name}]]`) {
+      if (cache?.frontmatter?.type === "task" && linkSlug(cache?.frontmatter?.workspace) === ws.name) {
         result.push(file);
       }
     }

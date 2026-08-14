@@ -732,7 +732,7 @@ export class ProjectDashboardView extends ItemView {
 
     const card = chartCard(
       root,
-      "Jalali calendar",
+      this.plugin.calendar.kind === "jalali" ? "Jalali calendar" : "Calendar",
       "Color shows how many hours were logged that day — click a day for the breakdown"
     );
     card.root.addClass("pm-db-wide");

@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, TFile, Menu, Notice } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
-import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
+import { linkSlug, updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { statusColor, priorityColor, isMutedStatus, normalizeStatus } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
 import { isArchivedPath } from "../utils/WorkspacePaths";
@@ -82,7 +82,7 @@ export class KanbanView extends ItemView {
         const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
         if (!fm) return false;
         if (normalizeStatus(fm.status) !== status) return false;
-        if (this.filterProject && fm.project !== `[[${this.filterProject}]]`) return false;
+        if (this.filterProject && linkSlug(fm.project) !== this.filterProject) return false;
         if (this.filterPriority && fm.priority !== this.filterPriority) return false;
         return true;
       });
@@ -181,7 +181,7 @@ export class KanbanView extends ItemView {
     // Meta row — project · due · hours, all on one line
     const meta = card.createDiv({ cls: "pm-card-meta" });
     if (fm.project) {
-      meta.createSpan({ text: `📁 ${fm.project.replace(/^\[\[|\]\]$/g, "")}` });
+      meta.createSpan({ text: `📁 ${linkSlug(fm.project)}` });
     }
     if (fm.due) {
       const isOverdue = fm.due < new Date().toISOString().slice(0, 10) && status !== "done";

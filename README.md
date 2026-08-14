@@ -4,13 +4,13 @@ Plan projects and tasks as ordinary Markdown notes, track time against them, and
 
 Everything lives in your vault as plain notes with frontmatter. There is no database and no lock-in: delete the plugin and your projects and tasks are still readable files.
 
-![The dashboard's overview tab](./images/dashboard-overview.png)
+![The dashboard's overview tab](./images/overview.png)
 
 ## What it does
 
-**Kanban board.** Tasks as cards in status columns, drag to change status. Cards show project, due date, priority and logged hours. Columns of finished work collapse to the most recent few so they cannot bury the board.
+**Kanban board and time tracking.** Tasks as cards in status columns, drag to change status. Start a timer on a task, pause it when you get pulled away, stop it when you are done. Logged hours are the time actually worked — a pause does not bill lunch as work. The timer survives a crash or a restart: it is stored on every state change and restored on load, telling you how long it thinks it has been running so you can keep or discard it.
 
-**Time tracking.** Start a timer on a task, pause it when you get pulled away, stop it when you are done. Logged hours are the time actually worked — a pause does not bill lunch as work. The timer survives a crash or a restart: it is stored on every state change and restored on load, telling you how long it thinks it has been running so you can keep or discard it.
+![The kanban board with a timer running](./images/time-tracking.png)
 
 **Dashboard.** Three tabs:
 
@@ -19,6 +19,10 @@ Everything lives in your vault as plain notes with frontmatter. There is no data
 - *Projects* — a status board of projects with progress, hours and task counts.
 
 Every period can be stepped backwards and forwards, so past months and years are reachable rather than everything being pinned to today.
+
+![The calendar tab](./images/calendar.png)
+
+![The projects tab](./images/project-dashboard.png)
 
 **Archive.** When a task or project reaches done, cancel or quite it moves into an archive folder together with its time entries. Closing a project takes its tasks with it. Reopening walks it back, except that a task which is done in its own right stays put. Archived items still appear in the board and every report — only the files move.
 

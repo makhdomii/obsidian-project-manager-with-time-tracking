@@ -1,6 +1,6 @@
 import { App, TFile, normalizePath } from "obsidian";
 import { Workspace, ProjectFrontmatter } from "../types";
-import { slugify } from "../utils/FrontmatterUtils";
+import { linkSlug, slugify } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 import { isUnderAnyFolder, projectFolders, taskFolders } from "../utils/WorkspacePaths";
 
@@ -48,7 +48,7 @@ workspace: "[[${ws.name}]]"
     for (const file of files) {
       if (!isUnderAnyFolder(file.path, folders)) continue;
       const cache = this.app.metadataCache.getFileCache(file);
-      if (cache?.frontmatter?.type === "project" && cache?.frontmatter?.workspace === `[[${ws.name}]]`) {
+      if (cache?.frontmatter?.type === "project" && linkSlug(cache?.frontmatter?.workspace) === ws.name) {
         result.push(file);
       }
     }
@@ -67,7 +67,7 @@ workspace: "[[${ws.name}]]"
       if (!isUnderAnyFolder(f.path, taskFolderList)) return false;
       const cache = app.metadataCache.getFileCache(f);
       const fm = cache?.frontmatter;
-      return fm?.type === "task" && fm?.project === `[[${projectSlug}]]`;
+      return fm?.type === "task" && linkSlug(fm?.project) === projectSlug;
     });
 
     let totalHours = 0;

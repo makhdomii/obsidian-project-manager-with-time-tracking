@@ -43,7 +43,11 @@ export class ChartTooltip {
     mark.addEventListener("mouseleave", () => this.hide());
     mark.addEventListener("blur", () => this.hide());
     mark.setAttribute("tabindex", "0");
-    mark.setAttribute("aria-label", lines().join(" — "));
+    mark.setAttribute("role", "img");
+    // Not aria-label: Obsidian renders its own tooltip for anything carrying
+    // one, which then sits underneath ours saying the same thing twice. A
+    // visually hidden label gives assistive tech the text without the double.
+    mark.createSpan({ cls: "pm-db-sr-only", text: lines().join(" — ") });
   }
 
   private show(mark: HTMLElement, lines: string[]): void {

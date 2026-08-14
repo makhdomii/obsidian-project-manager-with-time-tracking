@@ -29,6 +29,30 @@ export async function updateFrontmatterFields(
 }
 
 /**
+ * The note a `[[wikilink]]` frontmatter value points at, as a bare slug.
+ *
+ * Stripping the brackets is not enough. When archiving moves a file, Obsidian
+ * rewrites links to it — that is the whole reason moves go through
+ * fileManager.renameFile — and a link that has become ambiguous is rewritten as
+ * a full vault path. So `[[backup]]` becomes
+ * `[[ProjectManager/Work/Archive/Tasks/backup]]`, and every comparison against
+ * `[[backup]]` silently stops matching: a task drops out of its project, the
+ * project's hours fall to zero, and the board shows a path where a name should be.
+ *
+ * Aliases and heading anchors are dropped for the same reason — the target is
+ * what matters, not how a link happens to be written.
+ */
+export function linkSlug(value: unknown): string {
+  let s = String(value ?? "").trim();
+  s = s.replace(/^\[\[/, "").replace(/\]\]$/, "");
+  s = s.split("|")[0];
+  s = s.split("#")[0];
+  const slash = s.lastIndexOf("/");
+  if (slash >= 0) s = s.slice(slash + 1);
+  return s.replace(/\.md$/i, "").trim();
+}
+
+/**
  * Renders a value as a quoted YAML string.
  *
  * Titles used to be injected straight into "...", where a single quote in the

@@ -1,7 +1,7 @@
 import { App, Modal, TFile, Notice, Setting, normalizePath } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
-import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
+import { linkSlug, updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 import { resetTimerWithConfirm } from "./TimerBar";
 import { normalizeStatus } from "../utils/StatusColors";
@@ -40,7 +40,7 @@ export class TaskModal extends Modal {
     if (file) {
       const fm = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
       this.title = fm.title ?? file.basename;
-      this.projectSlug = (fm.project ?? "").replace(/^\[\[|\]\]$/g, "");
+      this.projectSlug = linkSlug(fm.project);
       this.status = normalizeStatus(fm.status ?? "todo");
       this.priority = fm.priority ?? "medium";
       this.due = fm.due ?? "";
