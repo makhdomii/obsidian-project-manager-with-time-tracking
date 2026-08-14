@@ -1,7 +1,7 @@
 import { App, Modal, TFile, Notice, Setting } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
-import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
+import { renameHeading, updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { normalizeStatus } from "../utils/StatusColors";
 
 export class ProjectModal extends Modal {
@@ -11,6 +11,8 @@ export class ProjectModal extends Modal {
   isNew: boolean;
 
   title = "";
+  /** The title as it was when the modal opened, so the H1 can be found */
+  private originalTitle = "";
   status = "todo";
   priority = "medium";
   due = "";
@@ -30,6 +32,7 @@ export class ProjectModal extends Modal {
     if (file) {
       const fm = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
       this.title = fm.title ?? file.basename;
+      this.originalTitle = this.title;
       this.status = normalizeStatus(fm.status ?? "todo");
       this.priority = fm.priority ?? "medium";
       this.due = fm.due ?? "";
@@ -110,6 +113,7 @@ export class ProjectModal extends Modal {
         priority: this.priority,
         due: this.due,
       });
+      await renameHeading(this.app, this.file, this.originalTitle, this.title);
       new Notice(`Project saved: ${this.title}`);
       await this.plugin.syncArchiveFor(this.ws, this.file);
     }

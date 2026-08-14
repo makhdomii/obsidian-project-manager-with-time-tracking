@@ -1,5 +1,7 @@
 # Project Manager with Time Tracking
 
+*[فارسی](README.fa.md)*
+
 Plan projects and tasks as ordinary Markdown notes, track time against them, and see where that time actually went. Works in the Gregorian or the Jalali (Persian) calendar.
 
 Everything lives in your vault as plain notes with frontmatter. There is no database and no lock-in: delete the plugin and your projects and tasks are still readable files.

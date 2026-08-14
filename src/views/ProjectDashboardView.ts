@@ -87,10 +87,15 @@ export class ProjectDashboardView extends ItemView {
 
     // Re-render on any vault change, but debounced: one save fires several events
     // in a row and a full dashboard render is not cheap.
-    this.registerEvent(this.app.vault.on("create", () => this.scheduleRender()));
-    this.registerEvent(this.app.vault.on("modify", () => this.scheduleRender()));
-    this.registerEvent(this.app.vault.on("delete", () => this.scheduleRender()));
+    //
+    // "changed" rather than vault "modify": modify fires as soon as bytes are
+    // written, before the frontmatter has been re-parsed, so a render at that
+    // point reads the old values and sticks with them.
+    this.registerEvent(this.app.metadataCache.on("changed", () => this.scheduleRender()));
     this.registerEvent(this.app.metadataCache.on("resolved", () => this.scheduleRender()));
+    this.registerEvent(this.app.vault.on("create", () => this.scheduleRender()));
+    this.registerEvent(this.app.vault.on("delete", () => this.scheduleRender()));
+    this.registerEvent(this.app.vault.on("rename", () => this.scheduleRender()));
   }
 
   async onClose(): Promise<void> {

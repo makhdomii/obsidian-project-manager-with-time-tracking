@@ -41,18 +41,15 @@ export class KanbanView extends ItemView {
       }
     }, 1000);
 
-    this.registerEvent(
-        this.app.vault.on("create", () => this.render())
-    );
-    this.registerEvent(
-        this.app.vault.on("modify", () => this.render())
-    );
-    this.registerEvent(
-        this.app.vault.on("delete", () => this.render())
-    );
-    this.registerEvent(
-        this.app.metadataCache.on("resolved", () => this.render())
-    );    
+    // "changed" rather than vault "modify": modify fires the moment bytes hit
+    // the file, before Obsidian has re-parsed the frontmatter, so rendering
+    // then reads the *old* values. That is why an edit made outside the app —
+    // a git discard, a pull — left the board showing the previous title.
+    this.registerEvent(this.app.metadataCache.on("changed", () => this.render()));
+    this.registerEvent(this.app.metadataCache.on("resolved", () => this.render()));
+    this.registerEvent(this.app.vault.on("create", () => this.render()));
+    this.registerEvent(this.app.vault.on("delete", () => this.render()));
+    this.registerEvent(this.app.vault.on("rename", () => this.render()));
   }
 
   async onClose(): Promise<void> {

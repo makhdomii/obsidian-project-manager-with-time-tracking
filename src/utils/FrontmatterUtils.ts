@@ -29,6 +29,44 @@ export async function updateFrontmatterFields(
 }
 
 /**
+ * Renames the note's own H1 when its title changes, so the note does not go on
+ * saying the old name while every board shows the new one.
+ *
+ * Only a line that is exactly the old heading is touched. Anything the user
+ * wrote is left alone, and a note whose heading was already edited by hand is
+ * simply not matched rather than being overwritten.
+ */
+export async function renameHeading(
+  app: App,
+  file: TFile,
+  from: string,
+  to: string
+): Promise<void> {
+  const before = from.trim();
+  const after = to.trim();
+  if (!before || !after || before === after) return;
+
+  // One "#" followed by whitespace, so "## Old name" is left alone, and the
+  // spacing around the text is ignored — a heading someone reformatted by hand
+  // is still the same heading.
+  const isTheHeading = (line: string): boolean => {
+    const m = line.match(/^#\s+(.*)$/);
+    return !!m && m[1].trim() === before;
+  };
+
+  await app.vault.process(file, (content) => {
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (isTheHeading(lines[i])) {
+        lines[i] = `# ${after}`;
+        break;
+      }
+    }
+    return lines.join("\n");
+  });
+}
+
+/**
  * The note a `[[wikilink]]` frontmatter value points at, as a bare slug.
  *
  * Stripping the brackets is not enough. When archiving moves a file, Obsidian
