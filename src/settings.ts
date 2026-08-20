@@ -3,6 +3,7 @@ import ProjectManagerPlugin from "./main";
 import { Workspace, DEFAULT_SETTINGS } from "./types";
 import { defaultArchiveFolder } from "./utils/WorkspacePaths";
 import { CalendarKind, WeekStart } from "./utils/Calendar";
+import { normalizeList, normalizePriority, normalizeStatus } from "./utils/StatusColors";
 
 export class ProjectManagerSettingTab extends PluginSettingTab {
   plugin: ProjectManagerPlugin;
@@ -201,13 +202,17 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Task Statuses").setHeading();
     new Setting(containerEl)
       .setName("Statuses")
-      .setDesc("Comma-separated list")
+      .setDesc("Comma-separated list (stored lowercase so boards always match notes)")
       .addText((text) =>
         text
           .setValue(this.plugin.settings.statuses.join(", "))
           .onChange(async (value) => {
-            this.plugin.settings.statuses = value.split(",").map((s) => s.trim()).filter(Boolean);
+            this.plugin.settings.statuses = normalizeList(
+              value.split(","),
+              normalizeStatus
+            );
             await this.plugin.saveSettings();
+            this.plugin.refreshTimerViews();
           })
       );
 
@@ -215,13 +220,17 @@ export class ProjectManagerSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Priorities").setHeading();
     new Setting(containerEl)
       .setName("Priorities")
-      .setDesc("Comma-separated list")
+      .setDesc("Comma-separated list (stored lowercase so boards always match notes)")
       .addText((text) =>
         text
           .setValue(this.plugin.settings.priorities.join(", "))
           .onChange(async (value) => {
-            this.plugin.settings.priorities = value.split(",").map((s) => s.trim()).filter(Boolean);
+            this.plugin.settings.priorities = normalizeList(
+              value.split(","),
+              normalizePriority
+            );
             await this.plugin.saveSettings();
+            this.plugin.refreshTimerViews();
           })
       );
   }

@@ -37,6 +37,8 @@ export class ConfirmModal extends Modal {
 
     // Cancel takes focus so a stray Enter does not destroy anything
     cancel.focus();
+    cancel.setAttribute("aria-label", "Cancel");
+    confirm.setAttribute("aria-label", this.opts.confirmText);
   }
 
   onClose(): void {

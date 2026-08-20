@@ -1,8 +1,8 @@
 // ╔══════════════════════════════════════════════════════════════════════╗
 // ║  NoteContent — "does this note hold anything beyond the template?"   ║
 // ║  The task/project template is only frontmatter, an H1 title, and     ║
-// ║  for a task a Time Log heading with its table. Anything beyond       ║
-// ║  that is the user's own note.                                        ║
+// ║  for a task a Time Log heading with its table plus an Updates log.   ║
+// ║  Anything beyond that is the user's own note.                        ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 import { App, TFile } from "obsidian";
@@ -25,7 +25,8 @@ export function stripFrontmatter(content: string): string {
 export function readBodyNotes(content: string): NoteInfo {
   const found: string[] = [];
   let seenTitle = false;
-  let inTimeLog = false;
+  /** Plugin-owned sections — Time Log tables and Updates entries are not "notes" */
+  let inTemplateSection = false;
 
   for (const raw of stripFrontmatter(content).split("\n")) {
     const line = raw.trim();
@@ -34,18 +35,30 @@ export function readBodyNotes(content: string): NoteInfo {
 
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
+      const level = heading[1].length;
       const text = heading[2].trim();
-      // The Time Log heading and the table under it are part of the template
-      if (/^time log$/i.test(text)) { inTimeLog = true; continue; }
+      // Time Log / Updates and everything under them until the next H2 are template
+      if (level === 2 && /^(time log|updates)$/i.test(text)) {
+        inTemplateSection = true;
+        continue;
+      }
+      if (level === 2) inTemplateSection = false;
+      // Dated update stamps under ## Updates
+      if (inTemplateSection && level >= 3) continue;
       // The first H1 is the note's own title. Deliberately not tied to "first line",
       // because some notes put their jottings above the title.
-      if (!seenTitle && heading[1].length === 1) { seenTitle = true; inTimeLog = false; continue; }
+      if (!seenTitle && level === 1) {
+        seenTitle = true;
+        inTemplateSection = false;
+        continue;
+      }
+      if (inTemplateSection) continue;
       found.push(text);
       if (found.length >= EXCERPT_LINES) break;
       continue;
     }
 
-    if (inTimeLog && line.startsWith("|")) continue;
+    if (inTemplateSection) continue;
 
     found.push(line);
     if (found.length >= EXCERPT_LINES) break;

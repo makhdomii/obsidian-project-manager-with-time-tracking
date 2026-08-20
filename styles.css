@@ -27,6 +27,13 @@
   color: var(--text-normal);
   font-size: 12.5px;
 }
+.pm-ws-select:focus-visible,
+.pm-filter-select:focus-visible,
+.pm-filter-input:focus-visible {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 28%, transparent);
+}
 
 .pm-btn {
   padding: 6px 14px;
@@ -41,11 +48,24 @@
 }
 .pm-btn:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 .pm-btn:active { transform: translateY(1px); }
+.pm-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 35%, transparent);
+}
+.pm-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
 .pm-btn-primary { background: var(--interactive-accent); color: var(--text-on-accent); border-color: transparent; }
 .pm-btn-primary:hover { background: var(--interactive-accent-hover); color: var(--text-on-accent); }
 .pm-btn-secondary { color: var(--text-muted); }
 .pm-btn-danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 45%, var(--background-modifier-border)); }
 .pm-btn-danger:hover { background: color-mix(in srgb, var(--color-red) 14%, transparent); color: var(--color-red); }
+
+.pm-project-select {
+  max-width: 220px;
+}
 
 .pm-timer-bar {
   display: flex;
@@ -57,7 +77,7 @@
   border: 1px solid color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border));
   color: var(--text-normal);
   font-size: 12px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .pm-timer-bar .pm-timer-elapsed {
   color: var(--interactive-accent);
@@ -186,7 +206,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 50px;
   padding: 2px 8px 10px;
   transition: background 0.15s;
   overflow-y: auto;
@@ -220,6 +239,13 @@
   border-style: solid;
   background: var(--background-modifier-hover);
 }
+.pm-col-more:focus-visible {
+  outline: none;
+  color: var(--text-normal);
+  border-style: solid;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 28%, transparent);
+}
 .pm-col-cards.pm-drag-over {
   background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
   outline: 2px dashed var(--interactive-accent);
@@ -238,43 +264,214 @@
 .pm-overdue-card {
   border-color: color-mix(in srgb, var(--color-red) 55%, var(--background-modifier-border));
 }
-.pm-project-card-header {
+
+/* ===== Projects tab — dense list for the active status tab ===== */
+.pm-projects-list {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 8px;
+  max-width: 920px;
 }
-.pm-project-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-normal);
-  line-height: 1.3;
-  flex: 1;
+
+.pm-projects-panel {
+  min-height: 48px;
+}
+
+.pm-projects-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pm-projects-empty {
+  margin: 4px 0;
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  border: 1.5px dashed var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.pm-project-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) minmax(88px, 140px) auto;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 8px 10px;
+  min-height: 44px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition-property: background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 0.12s;
+  transition-timing-function: ease;
+}
+.pm-project-row:hover {
+  background: var(--background-modifier-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.pm-project-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+.pm-project-row.pm-dragging {
+  opacity: 0.5;
+  transform: rotate(1deg);
+}
+.pm-project-row-overdue {
+  border-color: color-mix(in srgb, var(--color-red) 50%, var(--background-modifier-border));
+}
+.pm-project-row-priority {
+  margin-top: 0;
+  justify-self: center;
+}
+
+.pm-project-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pm-project-row-titleline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
-.pm-project-chip {
-  background: color-mix(in srgb, var(--pm-status-color, var(--text-faint)) 16%, transparent);
-  color: var(--pm-status-color, var(--text-muted));
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: none;
-  flex-shrink: 0;
+.pm-project-row-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-normal);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.pm-project-meta {
-  display: grid;
-  gap: 8px;
-  font-size: 13px;
+.pm-project-row-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  font-size: 11px;
   color: var(--text-muted);
 }
-.pm-project-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.pm-project-row-due.is-overdue {
+  color: var(--color-red);
+  font-weight: 700;
 }
-.pm-project-actions .pm-btn {
-  flex: 1 1 auto;
+.pm-project-row-hours {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.pm-project-row-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pm-project-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--background-modifier-border);
+  overflow: hidden;
+}
+.pm-project-progress-fill {
+  height: 100%;
+  width: var(--pm-progress, 0%);
+  border-radius: inherit;
+  background: var(--pm-status-color, var(--interactive-accent));
+  transition-property: width;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
+}
+.pm-project-row-taskcount {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.pm-project-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 0.12s;
+  transition-timing-function: ease;
+}
+.pm-project-row:hover .pm-project-row-actions,
+.pm-project-row:focus-within .pm-project-row-actions {
+  opacity: 1;
+}
+
+.pm-icon-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition-property: background-color, color, transform;
+  transition-duration: 0.12s;
+  transition-timing-function: ease-out;
+}
+.pm-icon-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.pm-icon-btn:active {
+  transform: scale(0.96);
+}
+.pm-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+  color: var(--text-normal);
+}
+.pm-icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 640px) {
+  .pm-project-row {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "pri main actions"
+      "pri tasks actions";
+  }
+  .pm-project-row-priority { grid-area: pri; align-self: start; margin-top: 6px; }
+  .pm-project-row-main { grid-area: main; }
+  .pm-project-row-tasks { grid-area: tasks; }
+  .pm-project-row-actions {
+    grid-area: actions;
+    opacity: 1;
+    align-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-project-row,
+  .pm-project-progress-fill,
+  .pm-icon-btn,
+  .pm-project-row-actions,
+  .pm-projects-rows {
+    transition: none;
+  }
+  .pm-icon-btn:active { transform: none; }
 }
 
 .pm-task-card {
@@ -293,6 +490,11 @@
   transform: translateY(-2px);
   background: var(--background-modifier-hover);
 }
+.pm-task-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--interactive-accent), 0 1px 2px rgba(0,0,0,0.14);
+  background: var(--background-modifier-hover);
+}
 .pm-kanban-board .pm-task-card.pm-task-inactive {
   opacity: 0.5;
 }
@@ -303,6 +505,8 @@
   border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent), 0 1px 2px rgba(0,0,0,0.14);
 }
+/* Active timer encoding — accent edge plus border tint (not decorative chrome) */
+/* impeccable-disable-next-line side-tab */
 .pm-kanban-board .pm-task-card.pm-task-active::before {
   content: "";
   position: absolute;
@@ -324,7 +528,7 @@
   opacity: 0.85;
 }
 
-/* Full text pill — still used on Project Dashboard cards */
+/* Full text pill — available for dense labels when a colour alone is not enough */
 .pm-priority-badge {
   display: inline-block;
   font-size: 10px;
@@ -388,7 +592,7 @@
   font-size: 11px;
   color: var(--text-muted);
 }
-.pm-meta-dot::before { content: "\\00b7"; margin: 0 5px; color: var(--text-faint); }
+.pm-meta-dot::before { content: "\00b7"; margin: 0 5px; color: var(--text-faint); }
 .pm-overdue { color: var(--color-red); font-weight: 700; }
 .pm-card-hours {
   font-variant-numeric: tabular-nums;
@@ -451,11 +655,73 @@
 .pm-elapsed-display {
   font-size: 24px;
   font-weight: 700;
-  color: #7ecfa0;
+  color: var(--interactive-accent);
   font-variant-numeric: tabular-nums;
   min-width: 90px;
 }
 .pm-manual-entry { padding: 8px 0; }
+.pm-updates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 4px 0 10px;
+  padding-right: 2px;
+}
+.pm-updates-empty {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.pm-update-entry {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+.pm-update-stamp {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.pm-update-text {
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  color: var(--text-normal);
+}
+.pm-updates-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+.pm-update-input {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.pm-update-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 25%, transparent);
+}
+.pm-updates-compose .pm-btn {
+  align-self: flex-end;
+}
 .pm-modal-btns {
   display: flex;
   gap: 8px;
@@ -534,7 +800,83 @@ body.theme-dark {
   transition: color .12s ease, border-color .12s ease;
 }
 .pm-db-tab:hover { color: var(--text-normal); }
+.pm-db-tab:focus-visible {
+  outline: none;
+  color: var(--text-normal);
+  box-shadow: inset 0 -2px 0 var(--interactive-accent);
+}
 .pm-db-tab.is-active { color: var(--text-normal); border-bottom-color: var(--interactive-accent); }
+
+/* Status sub-tabs under Projects */
+.pm-db-status-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  background: var(--background-primary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.pm-db-status-tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 0.12s;
+  transition-timing-function: ease;
+}
+.pm-db-status-tab::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pm-status-color, var(--text-faint));
+  flex-shrink: 0;
+}
+.pm-db-status-tab:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+.pm-db-status-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 40%, transparent);
+}
+.pm-db-status-tab.is-active {
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--pm-status-color, var(--interactive-accent)) 14%, transparent);
+  border-color: color-mix(in srgb, var(--pm-status-color, var(--interactive-accent)) 35%, transparent);
+}
+.pm-db-status-tab.is-drop-target {
+  background: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+  border-color: var(--interactive-accent);
+  border-style: dashed;
+}
+.pm-db-status-tab-count {
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  padding: 0 6px;
+  min-width: 1.4em;
+  text-align: center;
+}
+.pm-db-status-tab.is-active .pm-db-status-tab-count {
+  color: var(--text-muted);
+  background: var(--background-primary);
+}
 
 .pm-db-scroll { flex: 1; overflow-y: auto; padding: 18px 16px 28px; }
 
@@ -557,6 +899,10 @@ body.theme-dark {
 }
 .pm-db-navbtn:hover:not(:disabled), .pm-db-navtoday:hover:not(:disabled) {
   background: var(--background-modifier-hover); color: var(--text-normal);
+}
+.pm-db-navbtn:focus-visible, .pm-db-navtoday:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 35%, transparent);
 }
 .pm-db-navbtn:disabled, .pm-db-navtoday:disabled { opacity: .35; cursor: default; }
 .pm-db-navlabel {
@@ -645,6 +991,10 @@ body.theme-dark {
   flex-shrink: 0;
 }
 .pm-db-toggle:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.pm-db-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 35%, transparent);
+}
 
 .pm-db-tablewrap { overflow-x: auto; }
 .pm-db-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
@@ -753,6 +1103,11 @@ body.theme-dark {
 .pm-db-calcell.is-today { outline: 2px solid var(--text-accent); outline-offset: -2px; }
 .pm-db-calcell.is-selected { outline: 2px solid var(--text-normal); outline-offset: 1px; }
 .pm-db-calcell:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
+.pm-db-caldot:focus-visible,
+.pm-db-hmcell:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
 
 .pm-db-caldays { display: flex; flex-wrap: wrap; gap: 8px; }
 .pm-db-calday { display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -766,7 +1121,7 @@ body.theme-dark {
 .pm-db-caldot.is-selected { outline: 2px solid var(--text-normal); outline-offset: 1px; }
 
 .pm-db-hmrow { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
-.pm-db-hmlbl { width: 26px; font-size: 10px; color: var(--text-faint); text-align: left; flex-shrink: 0; }
+.pm-db-hmlbl { width: 26px; font-size: 10px; color: var(--text-faint); text-align: start; flex-shrink: 0; }
 .pm-db-hmcells { display: flex; gap: 3px; flex-wrap: nowrap; }
 .pm-db-hmcell { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; cursor: pointer; }
 .pm-db-hmcell.is-empty { background: transparent !important; cursor: default; pointer-events: none; }
@@ -863,8 +1218,28 @@ body.theme-dark .pm-db-calcell[data-heat="5"], body.theme-dark .pm-db-caldot[dat
 .pm-db-clickable { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pm-db-calcell, .pm-db-tab { transition: none; }
+  .pm-db-calcell, .pm-db-tab, .pm-db-status-tab { transition: none; }
   .pm-db-calcell:hover { transform: none; }
+}
+
+/* Narrow Obsidian panes / phone */
+@media (max-width: 560px) {
+  .pm-toolbar { padding: 8px 10px; gap: 6px; }
+  .pm-db-tabs { padding: 0 10px; overflow-x: auto; }
+  .pm-db-status-tabs { padding: 8px 10px; }
+  .pm-project-select { max-width: 160px; }
+  .pm-db-scroll { padding: 14px 10px 24px; }
+  .pm-db-hero-value { font-size: 36px; }
+  .pm-db-cards { grid-template-columns: 1fr; }
+  .pm-kanban-board { padding: 10px; gap: 10px; }
+  .pm-kanban-col { flex-basis: 220px; min-width: 200px; max-width: 240px; }
+  .pm-timer-bar {
+    margin-inline-start: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    border-radius: 10px;
+  }
+  .pm-timer-bar .pm-timer-task { max-width: none; flex: 1 1 12ch; }
 }
 
 /* ===== Utility ===== */

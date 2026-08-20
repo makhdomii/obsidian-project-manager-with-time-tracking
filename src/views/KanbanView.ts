@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf, TFile, Menu, Notice } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { linkSlug, updateFrontmatterFields } from "../utils/FrontmatterUtils";
-import { statusColor, priorityColor, isMutedStatus, normalizeStatus } from "../utils/StatusColors";
+import { statusColor, priorityColor, isMutedStatus, normalizeStatus, normalizePriority } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
 import { isArchivedPath } from "../utils/WorkspacePaths";
 import { renderTimerBar, resetTimerWithConfirm, tickTimerDisplays } from "./TimerBar";
@@ -15,6 +15,7 @@ const COLLAPSED_LIMIT = 8;
 export class KanbanView extends ItemView {
   plugin: ProjectManagerPlugin;
   currentWorkspace: Workspace;
+  /** Selected project slug — empty means all projects */
   filterProject: string = "";
   filterPriority: string = "";
   /** Paths of tasks holding text beyond the template → marker on the card */
@@ -58,29 +59,72 @@ export class KanbanView extends ItemView {
     }
   }
 
+  /** Keep typing focus across full redraws (selects). */
+  private captureToolbarFocus(container: HTMLElement): {
+    kind: "ws" | "project" | "prio";
+  } | null {
+    const el = container.querySelector(":focus") as HTMLElement | null;
+    if (!el || !container.contains(el)) return null;
+    if (el.classList.contains("pm-ws-select")) return { kind: "ws" };
+    if (el.classList.contains("pm-project-select")) return { kind: "project" };
+    if (el.classList.contains("pm-filter-select")) return { kind: "prio" };
+    return null;
+  }
+
+  private restoreToolbarFocus(
+    container: HTMLElement,
+    focus: ReturnType<KanbanView["captureToolbarFocus"]>
+  ): void {
+    if (!focus) return;
+    const sel =
+      focus.kind === "ws"
+        ? container.querySelector<HTMLSelectElement>(".pm-ws-select")
+        : focus.kind === "project"
+          ? container.querySelector<HTMLSelectElement>(".pm-project-select")
+          : container.querySelector<HTMLSelectElement>(".pm-filter-select");
+    if (!sel) return;
+    sel.focus();
+  }
+
   async render(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement;
+    const restoreFocus = this.captureToolbarFocus(container);
     container.empty();
     container.addClass("pm-kanban-container");
 
-    // Toolbar
-    this.renderToolbar(container);
-
-    // Board
-    const board = container.createDiv({ cls: "pm-kanban-board" });
-    const statuses = this.plugin.settings.statuses;
     const tasks = await this.plugin.taskManager.getTasks(this.currentWorkspace);
+    const projects = await this.plugin.projectManager.getProjects(this.currentWorkspace);
     this.noted = await this.plugin.noteScanner.scan(tasks);
+
+    // Settings columns first, then any status values that exist on tasks but are
+    // not configured (e.g. legacy "doing") — otherwise those tasks vanish.
+    const foundStatuses = tasks.map((f) => {
+      const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
+      return String(fm?.status ?? "");
+    });
+    const statuses = this.allStatuses(foundStatuses);
+
+    this.ensureProjectFilter(projects);
+    this.renderToolbar(container, projects, tasks);
+
+    const board = container.createDiv({ cls: "pm-kanban-board" });
+    const selectedSlug = this.filterProject;
 
     for (const status of statuses) {
       const col = board.createDiv({ cls: "pm-kanban-col" });
       col.setCssProps({ "--pm-status-color": statusColor(status) });
+      const colKey = normalizeStatus(status);
       const colFiltered = tasks.filter((f) => {
         const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
         if (!fm) return false;
-        if (normalizeStatus(fm.status) !== status) return false;
-        if (this.filterProject && linkSlug(fm.project) !== this.filterProject) return false;
-        if (this.filterPriority && fm.priority !== this.filterPriority) return false;
+        if (normalizeStatus(fm.status) !== colKey) return false;
+        if (selectedSlug && linkSlug(fm.project) !== selectedSlug) return false;
+        if (
+          this.filterPriority &&
+          normalizePriority(fm.priority) !== normalizePriority(this.filterPriority)
+        ) {
+          return false;
+        }
         return true;
       });
 
@@ -90,7 +134,7 @@ export class KanbanView extends ItemView {
       if (closed) {
         colFiltered.sort((a, b) => b.stat.mtime - a.stat.mtime);
       }
-      const expanded = this.expandedCols.has(status);
+      const expanded = this.expandedCols.has(colKey);
       const hidden = closed && !expanded ? Math.max(0, colFiltered.length - COLLAPSED_LIMIT) : 0;
       const visible = hidden > 0 ? colFiltered.slice(0, COLLAPSED_LIMIT) : colFiltered;
 
@@ -100,13 +144,16 @@ export class KanbanView extends ItemView {
       header.createSpan({ cls: "pm-col-count", text: String(colFiltered.length) });
 
       const cards = col.createDiv({ cls: "pm-col-cards" });
-      cards.setAttribute("data-status", status);
+      cards.setAttribute("data-status", colKey);
 
       if (colFiltered.length === 0) {
-        cards.createDiv({ cls: "pm-col-empty", text: "No tasks here" });
+        cards.createDiv({
+          cls: "pm-col-empty",
+          text: selectedSlug ? "No tasks for this project" : "No tasks here",
+        });
       }
       for (const task of visible) {
-        this.renderTaskCard(cards, task, status);
+        this.renderTaskCard(cards, task, colKey, !!selectedSlug);
       }
 
       if (hidden > 0 || (closed && expanded && colFiltered.length > COLLAPSED_LIMIT)) {
@@ -116,13 +163,13 @@ export class KanbanView extends ItemView {
         });
         toggle.addEventListener("click", async (e) => {
           e.stopPropagation();
-          if (expanded) this.expandedCols.delete(status);
-          else this.expandedCols.add(status);
+          if (expanded) this.expandedCols.delete(colKey);
+          else this.expandedCols.add(colKey);
           await this.render();
         });
       }
 
-      // Drop zone
+      // Drop zone — always write the canonical lowercase status so boards match.
       cards.addEventListener("dragover", (e) => { e.preventDefault(); cards.addClass("pm-drag-over"); });
       cards.addEventListener("dragleave", () => cards.removeClass("pm-drag-over"));
       cards.addEventListener("drop", async (e) => {
@@ -132,11 +179,30 @@ export class KanbanView extends ItemView {
         if (!taskPath) return;
         const file = this.app.vault.getAbstractFileByPath(taskPath) as TFile | null;
         if (!file) return;
-        await updateFrontmatterFields(this.app, file, { status });
+        await updateFrontmatterFields(this.app, file, { status: colKey });
         await this.plugin.syncArchiveFor(this.currentWorkspace, file);
         await this.render();
       });
     }
+
+    this.restoreToolbarFocus(container, restoreFocus);
+  }
+
+  private ensureProjectFilter(projects: TFile[]): void {
+    if (!this.filterProject) return;
+    if (!projects.some((p) => p.basename === this.filterProject)) {
+      this.filterProject = "";
+    }
+  }
+
+  /** Known statuses from settings, plus any extras found on tasks */
+  private allStatuses(found: string[]): string[] {
+    const known = this.plugin.settings.statuses.map(normalizeStatus);
+    const knownSet = new Set(known);
+    const extra = Array.from(new Set(found.map(normalizeStatus)))
+      .filter((s) => s && !knownSet.has(s))
+      .sort();
+    return [...known, ...extra];
   }
 
   /**
@@ -177,11 +243,20 @@ export class KanbanView extends ItemView {
     return stale;
   }
 
-  renderTaskCard(container: HTMLElement, file: TFile, status: string): void {
+  renderTaskCard(
+    container: HTMLElement,
+    file: TFile,
+    status: string,
+    hideProject = false
+  ): void {
     const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+    const title = fm.title ?? file.basename;
     const card = container.createDiv({ cls: "pm-task-card" });
     card.setAttribute("draggable", "true");
     card.setAttribute("data-path", file.path);
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", title);
 
     const activePath = this.plugin.timeTracker.getActiveTaskPath();
     if (this.plugin.timeTracker.isRunning()) {
@@ -199,7 +274,7 @@ export class KanbanView extends ItemView {
 
     // Title + priority dot
     const head = card.createDiv({ cls: "pm-card-head" });
-    head.createDiv({ cls: "pm-card-title", text: fm.title ?? file.basename });
+    head.createDiv({ cls: "pm-card-title", text: title });
     const notes = this.noted.get(file.path);
     if (notes) renderNoteBadge(head, notes);
     if (isArchivedPath(this.currentWorkspace, file.path)) {
@@ -215,12 +290,16 @@ export class KanbanView extends ItemView {
 
     // Meta row — project · due · hours, all on one line
     const meta = card.createDiv({ cls: "pm-card-meta" });
-    if (fm.project) {
+    const showProject = !hideProject && !!fm.project;
+    if (showProject) {
       meta.createSpan({ text: `📁 ${linkSlug(fm.project)}` });
     }
     if (fm.due) {
       const isOverdue = fm.due < new Date().toISOString().slice(0, 10) && status !== "done";
-      if (fm.project) meta.createSpan({ cls: "pm-meta-dot" });
+      if (showProject) {
+        const sep = meta.createSpan({ cls: "pm-meta-dot" });
+        sep.setAttribute("aria-hidden", "true");
+      }
       meta.createSpan({ cls: isOverdue ? "pm-overdue" : "", text: `📅 ${fm.due}` });
     }
     meta.createSpan({ cls: "pm-card-hours", text: `⏱ ${fm.total_hours ?? 0}h` });
@@ -229,15 +308,22 @@ export class KanbanView extends ItemView {
     if (activePath === file.path) {
       const isPaused = this.plugin.timeTracker.isPaused();
       const timerDiv = card.createDiv({ cls: `pm-card-timer${isPaused ? " paused" : ""}` });
-      timerDiv.createSpan({ cls: "pm-timer-dot" });
+      timerDiv.createSpan({ cls: "pm-timer-dot", attr: { "aria-hidden": "true" } });
       timerDiv.createSpan({ cls: "pm-timer-elapsed", text: this.plugin.timeTracker.getElapsed() });
       if (isPaused) timerDiv.createSpan({ cls: "pm-timer-badge", text: "paused" });
     }
 
-    // Click to open task modal
+    const openCard = () => this.plugin.openTaskModal(file, this.currentWorkspace);
+
+    // Click / keyboard to open task modal
     card.addEventListener("click", (e) => {
       if ((e.target as HTMLElement).closest(".pm-card-timer")) return;
-      this.plugin.openTaskModal(file, this.currentWorkspace);
+      openCard();
+    });
+    card.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      openCard();
     });
 
     // Right-click context menu
@@ -292,11 +378,12 @@ export class KanbanView extends ItemView {
     });
   }
 
-  renderToolbar(container: HTMLElement): void {
+  renderToolbar(container: HTMLElement, projects: TFile[], tasks: TFile[]): void {
     const toolbar = container.createDiv({ cls: "pm-toolbar" });
 
     // Workspace selector
     const wsSelect = toolbar.createEl("select", { cls: "pm-ws-select" });
+    wsSelect.setAttribute("aria-label", "Workspace");
     this.plugin.settings.workspaces.forEach((ws) => {
       const opt = wsSelect.createEl("option", { value: ws.id, text: ws.name });
       if (ws.id === this.currentWorkspace.id) opt.selected = true;
@@ -306,25 +393,52 @@ export class KanbanView extends ItemView {
       if (ws) {
         this.currentWorkspace = ws;
         this.plugin.settings.defaultWorkspaceId = ws.id;
+        this.filterProject = "";
         await this.plugin.saveSettings();
         await this.render();
       }
     });
 
-    // Filter by project
-    const projInput = toolbar.createEl("input", {
-      cls: "pm-filter-input",
-      type: "text",
-      placeholder: "Filter project...",
+    // Project filter — one dropdown instead of a row of buttons
+    const taskCountBySlug = new Map<string, number>();
+    for (const task of tasks) {
+      const fm = this.app.metadataCache.getFileCache(task)?.frontmatter;
+      const slug = linkSlug(fm?.project);
+      if (!slug) continue;
+      taskCountBySlug.set(slug, (taskCountBySlug.get(slug) ?? 0) + 1);
+    }
+
+    const projSelect = toolbar.createEl("select", { cls: "pm-filter-select pm-project-select" });
+    projSelect.setAttribute("aria-label", "Filter by project");
+    projSelect.createEl("option", {
+      value: "",
+      text: `All projects (${tasks.length})`,
     });
-    projInput.value = this.filterProject;
-    projInput.addEventListener("input", async () => {
-      this.filterProject = projInput.value.trim();
+
+    const sorted = projects.slice().sort((a, b) => {
+      const ta = String(this.app.metadataCache.getFileCache(a)?.frontmatter?.title ?? a.basename);
+      const tb = String(this.app.metadataCache.getFileCache(b)?.frontmatter?.title ?? b.basename);
+      return ta.localeCompare(tb);
+    });
+    for (const file of sorted) {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      const slug = file.basename;
+      const title = String(fm?.title ?? slug);
+      const count = taskCountBySlug.get(slug) ?? 0;
+      const opt = projSelect.createEl("option", {
+        value: slug,
+        text: `${title} (${count})`,
+      });
+      if (slug === this.filterProject) opt.selected = true;
+    }
+    projSelect.addEventListener("change", async () => {
+      this.filterProject = projSelect.value;
       await this.render();
     });
 
     // Filter by priority
     const prioSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
+    prioSelect.setAttribute("aria-label", "Filter by priority");
     prioSelect.createEl("option", { value: "", text: "All priorities" });
     this.plugin.settings.priorities.forEach((p) => {
       const opt = prioSelect.createEl("option", { value: p, text: p });
@@ -335,10 +449,10 @@ export class KanbanView extends ItemView {
       await this.render();
     });
 
-    // New task button
+    // New task button — preselects the active project when set
     toolbar.createEl("button", { cls: "pm-btn pm-btn-primary", text: "+ New Task" })
       .addEventListener("click", () => {
-        this.plugin.openNewTaskModal(this.currentWorkspace);
+        this.plugin.openNewTaskModal(this.currentWorkspace, this.filterProject || undefined);
       });
 
     // New project button

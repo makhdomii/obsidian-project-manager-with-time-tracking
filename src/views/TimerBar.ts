@@ -68,6 +68,7 @@ export function renderTimerBar(
   const pauseBtn = bar.createEl("button", {
     cls: "pm-btn pm-btn-secondary",
     text: paused ? "▶ Resume" : "⏸ Pause",
+    attr: { "aria-label": paused ? "Resume timer" : "Pause timer" },
   });
   pauseBtn.addEventListener("click", () => {
     tracker.togglePause();
@@ -83,7 +84,11 @@ export function renderTimerBar(
     resetTimerWithConfirm(plugin.app, plugin, onChange);
   });
 
-  const stopBtn = bar.createEl("button", { cls: "pm-btn pm-btn-danger", text: "⏹ Stop" });
+  const stopBtn = bar.createEl("button", {
+    cls: "pm-btn pm-btn-danger",
+    text: "⏹ Stop",
+    attr: { "aria-label": "Stop timer and log elapsed time" },
+  });
   stopBtn.addEventListener("click", async () => {
     try {
       const hours = await tracker.stopTimer(ws);

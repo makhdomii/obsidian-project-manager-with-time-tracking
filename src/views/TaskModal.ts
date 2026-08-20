@@ -4,7 +4,8 @@ import { Workspace } from "../types";
 import { linkSlug, renameHeading, updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 import { resetTimerWithConfirm } from "./TimerBar";
-import { normalizeStatus } from "../utils/StatusColors";
+import { normalizeStatus, normalizePriority } from "../utils/StatusColors";
+import { appendTaskUpdate, parseTaskUpdates, TaskUpdate } from "../utils/TaskUpdates";
 
 export class TaskModal extends Modal {
   // Projects not yet started or in progress — only these can be picked for a task
@@ -26,6 +27,9 @@ export class TaskModal extends Modal {
   due = "";
   manualHours = "";
   manualDate = "";
+  /** Draft text for a new update entry */
+  updateDraft = "";
+  private existingUpdates: TaskUpdate[] = [];
 
   constructor(
     app: App,
@@ -45,7 +49,7 @@ export class TaskModal extends Modal {
       this.originalTitle = this.title;
       this.projectSlug = linkSlug(fm.project);
       this.status = normalizeStatus(fm.status ?? "todo");
-      this.priority = fm.priority ?? "medium";
+      this.priority = normalizePriority(fm.priority ?? "medium");
       this.due = fm.due ?? "";
     }
   }
@@ -79,24 +83,46 @@ export class TaskModal extends Modal {
     return out.sort();
   }
 
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.addClass("pm-modal");
+  async onOpen(): Promise<void> {
+    if (this.file) {
+      try {
+        this.existingUpdates = parseTaskUpdates(await this.app.vault.cachedRead(this.file));
+      } catch {
+        this.existingUpdates = [];
+      }
+    } else {
+      this.existingUpdates = [];
+    }
 
-    // Enter does what the nearest primary button does: inside the manual-time
-    // fields that is Add Entry, otherwise Create/Save
-    contentEl.addEventListener("keydown", (e: KeyboardEvent) => {
+    // Bind once — renderForm empties children but keeps listeners on contentEl
+    this.contentEl.addClass("pm-modal");
+    this.contentEl.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.isComposing) return;
       const target = e.target as HTMLElement;
       if (target.tagName === "TEXTAREA") return;
       e.preventDefault();
       if (target.closest(".pm-manual-entry")) {
-        contentEl.querySelector<HTMLButtonElement>(".pm-manual-entry .pm-btn-secondary")?.click();
+        this.contentEl.querySelector<HTMLButtonElement>(".pm-manual-entry .pm-btn-secondary")?.click();
+        return;
+      }
+      if (target.closest(".pm-updates-compose")) {
+        this.contentEl.querySelector<HTMLButtonElement>(".pm-updates-compose .pm-btn-secondary")?.click();
         return;
       }
       void this.submitAndClose();
     });
+
+    this.renderForm();
+  }
+
+  private renderForm(): void {
+    if (this.timerInterval !== null) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+
+    const { contentEl } = this;
+    contentEl.empty();
 
     contentEl.createEl("h2", { text: this.isNew ? "New Task" : `Task: ${this.title}` });
 
@@ -153,7 +179,10 @@ export class TaskModal extends Modal {
       const isThisTaskRunning = this.plugin.timeTracker.getActiveTaskPath() === file.path;
 
       if (isThisTaskRunning) {
-        const elapsed = timerDiv.createDiv({ cls: "pm-elapsed-display" });
+        const paused = this.plugin.timeTracker.isPaused();
+        const elapsed = timerDiv.createDiv({
+          cls: `pm-elapsed-display${paused ? " paused" : ""}`,
+        });
         elapsed.textContent = this.plugin.timeTracker.getElapsed();
         this.timerInterval = window.setInterval(() => {
           elapsed.textContent = this.plugin.timeTracker.getElapsed();
@@ -161,13 +190,15 @@ export class TaskModal extends Modal {
 
         const pauseBtn = timerDiv.createEl("button", {
           cls: "pm-btn pm-btn-secondary",
-          text: this.plugin.timeTracker.isPaused() ? "▶ Resume" : "⏸ Pause",
+          text: paused ? "▶ Resume" : "⏸ Pause",
+          attr: { "aria-label": paused ? "Resume timer" : "Pause timer" },
         });
         pauseBtn.addEventListener("click", () => {
           this.plugin.timeTracker.togglePause();
-          const paused = this.plugin.timeTracker.isPaused();
-          pauseBtn.textContent = paused ? "▶ Resume" : "⏸ Pause";
-          elapsed.toggleClass("paused", paused);
+          const nowPaused = this.plugin.timeTracker.isPaused();
+          pauseBtn.textContent = nowPaused ? "▶ Resume" : "⏸ Pause";
+          pauseBtn.setAttribute("aria-label", nowPaused ? "Resume timer" : "Pause timer");
+          elapsed.toggleClass("paused", nowPaused);
           elapsed.textContent = this.plugin.timeTracker.getElapsed();
           this.plugin.refreshTimerViews();
         });
@@ -175,6 +206,7 @@ export class TaskModal extends Modal {
         const resetBtn = timerDiv.createEl("button", {
           cls: "pm-btn pm-btn-secondary",
           text: "⟲ Reset",
+          attr: { "aria-label": "Reset the timer to zero without logging" },
         });
         resetBtn.addEventListener("click", () => {
           resetTimerWithConfirm(this.app, this.plugin, () => {
@@ -183,7 +215,11 @@ export class TaskModal extends Modal {
           });
         });
 
-        const stopBtn = timerDiv.createEl("button", { cls: "pm-btn pm-btn-danger", text: "⏹ Stop Timer" });
+        const stopBtn = timerDiv.createEl("button", {
+          cls: "pm-btn pm-btn-danger",
+          text: "⏹ Stop Timer",
+          attr: { "aria-label": "Stop timer and log elapsed time" },
+        });
         stopBtn.addEventListener("click", async () => {
           try {
             const hours = await this.plugin.timeTracker.stopTimer(this.ws);
@@ -199,6 +235,7 @@ export class TaskModal extends Modal {
         const startBtn = timerDiv.createEl("button", {
           cls: "pm-btn pm-btn-primary",
           text: "▶ Start Timer",
+          attr: { "aria-label": "Start timer on this task" },
         });
         startBtn.addEventListener("click", () => {
           try {
@@ -242,6 +279,8 @@ export class TaskModal extends Modal {
           this.plugin.refreshTimerViews();
           this.close();
         });
+
+      this.renderUpdatesSection(contentEl, file);
     }
 
     // Buttons
@@ -263,6 +302,52 @@ export class TaskModal extends Modal {
       .addEventListener("click", () => this.close());
   }
 
+  private renderUpdatesSection(parent: HTMLElement, file: TFile): void {
+    parent.createEl("h3", { text: "Updates" });
+
+    const list = parent.createDiv({ cls: "pm-updates-list" });
+    if (this.existingUpdates.length === 0) {
+      list.createDiv({
+        cls: "pm-updates-empty",
+        text: "No updates yet — add a short status note below.",
+      });
+    } else {
+      for (const update of this.existingUpdates) {
+        const card = list.createDiv({ cls: "pm-update-entry" });
+        card.createDiv({ cls: "pm-update-stamp", text: update.stamp });
+        card.createDiv({ cls: "pm-update-text", text: update.text });
+      }
+    }
+
+    parent.createEl("h4", { text: "Add update" });
+    const compose = parent.createDiv({ cls: "pm-updates-compose" });
+    const area = compose.createEl("textarea", {
+      cls: "pm-update-input",
+      attr: {
+        rows: "3",
+        placeholder: "What changed? Current blockers, progress, next step…",
+      },
+    });
+    area.value = this.updateDraft;
+    area.addEventListener("input", () => {
+      this.updateDraft = area.value;
+    });
+
+    compose
+      .createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Add update" })
+      .addEventListener("click", async () => {
+        const added = await appendTaskUpdate(this.app, file, this.updateDraft);
+        if (!added) {
+          new Notice("Write an update before adding");
+          return;
+        }
+        this.updateDraft = "";
+        this.existingUpdates = [added, ...this.existingUpdates];
+        new Notice("Update added");
+        this.renderForm();
+      });
+  }
+
   private async submitAndClose(): Promise<void> {
     if (!this.title.trim()) { new Notice("Title is required"); return; }
     await this.save();
@@ -270,13 +355,15 @@ export class TaskModal extends Modal {
   }
 
   async save(): Promise<void> {
+    const status = normalizeStatus(this.status);
+    const priority = normalizePriority(this.priority);
     if (this.isNew) {
       await this.plugin.taskManager.createTask(
         this.ws,
         this.title,
         this.projectSlug,
-        this.status,
-        this.priority,
+        status,
+        priority,
         this.due
       );
       new Notice(`Task created: ${this.title}`);
@@ -284,8 +371,8 @@ export class TaskModal extends Modal {
       await updateFrontmatterFields(this.app, this.file, {
         title: this.title,
         project: `[[${this.projectSlug}]]`,
-        status: this.status,
-        priority: this.priority,
+        status,
+        priority,
         due: this.due,
       });
       await renameHeading(this.app, this.file, this.originalTitle, this.title);

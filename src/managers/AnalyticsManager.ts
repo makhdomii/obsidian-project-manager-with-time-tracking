@@ -8,7 +8,7 @@
 import { App, TFile } from "obsidian";
 import { Workspace } from "../types";
 import { toISODate, todayISO, addDays, daysBetween } from "../utils/Jalali";
-import { normalizeStatus } from "../utils/StatusColors";
+import { normalizeStatus, normalizePriority } from "../utils/StatusColors";
 import { linkSlug } from "../utils/FrontmatterUtils";
 import {
   isArchivedPath, isUnderAnyFolder, projectFolders, taskFolders, timeEntryFolders,
@@ -143,7 +143,7 @@ export class AnalyticsManager {
         archived: isArchivedPath(ws, file.path),
         title: String(fm.title ?? file.basename),
         status: normalizeStatus(fm.status ?? "todo"),
-        priority: String(fm.priority ?? "medium"),
+        priority: normalizePriority(fm.priority ?? "medium"),
         projectSlug: unlink(fm.project),
         due: String(fm.due ?? ""),
         created: String(fm.created ?? ""),
@@ -170,7 +170,7 @@ export class AnalyticsManager {
         archived: isArchivedPath(ws, file.path),
         title: String(fm.title ?? file.basename),
         status: normalizeStatus(fm.status ?? "todo"),
-        priority: String(fm.priority ?? "medium"),
+        priority: normalizePriority(fm.priority ?? "medium"),
         due: String(fm.due ?? ""),
         created: String(fm.created ?? ""),
         taskCount: mine.length,

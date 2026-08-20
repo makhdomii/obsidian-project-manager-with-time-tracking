@@ -1,8 +1,8 @@
-import { ItemView, WorkspaceLeaf, TFile, Menu, Notice } from "obsidian";
+import { ItemView, WorkspaceLeaf, TFile, Menu, Notice, setIcon } from "obsidian";
 import { updateFrontmatterFields } from "../utils/FrontmatterUtils";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
-import { statusColor, priorityColor, isMutedStatus } from "../utils/StatusColors";
+import { statusColor, priorityColor, isMutedStatus, normalizeStatus, normalizePriority } from "../utils/StatusColors";
 import { NoteInfo, renderNoteBadge } from "../utils/NoteContent";
 import { renderTimerBar, tickTimerDisplays } from "./TimerBar";
 import {
@@ -50,7 +50,7 @@ interface RangeBounds {
 export class ProjectDashboardView extends ItemView {
   plugin: ProjectManagerPlugin;
   currentWorkspace: Workspace;
-  filterStatus = "";
+  filterStatus = "active";
   filterPriority = "";
 
   private tab: TabId = "projects";
@@ -125,10 +125,12 @@ export class ProjectDashboardView extends ItemView {
     this.tooltip = new ChartTooltip(container);
 
     this.renderToolbar(container);
+
+    const data = await this.plugin.analytics.collect(this.currentWorkspace);
     this.renderTabs(container);
+    if (this.tab === "projects") this.renderProjectStatusTabs(container, data);
 
     const scroll = container.createDiv({ cls: "pm-db-scroll" });
-    const data = await this.plugin.analytics.collect(this.currentWorkspace);
 
     if (this.tab === "overview") this.renderOverview(scroll, data);
     else if (this.tab === "calendar") this.renderCalendarTab(scroll, data);
@@ -146,6 +148,7 @@ export class ProjectDashboardView extends ItemView {
     const toolbar = container.createDiv({ cls: "pm-toolbar" });
 
     const wsSelect = toolbar.createEl("select", { cls: "pm-ws-select" });
+    wsSelect.setAttribute("aria-label", "Workspace");
     this.plugin.settings.workspaces.forEach((ws) => {
       const opt = wsSelect.createEl("option", { value: ws.id, text: ws.name });
       if (ws.id === this.currentWorkspace.id) opt.selected = true;
@@ -162,6 +165,7 @@ export class ProjectDashboardView extends ItemView {
     });
 
     const rangeSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
+    rangeSelect.setAttribute("aria-label", "Time range");
     RANGES.forEach((r) => {
       const opt = rangeSelect.createEl("option", { value: r.id, text: r.label });
       if (r.id === this.range) opt.selected = true;
@@ -174,20 +178,10 @@ export class ProjectDashboardView extends ItemView {
     // Period navigation — only where a period means anything
     if (this.tab !== "projects") this.renderPeriodNav(toolbar);
 
-    // Status and priority filters only narrow the projects tab, so they show only there
+    // Priority filter only — status is chosen via the sub-tabs under Projects
     if (this.tab === "projects") {
-      const statusSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
-      statusSelect.createEl("option", { value: "", text: "All statuses" });
-      this.plugin.settings.statuses.forEach((status) => {
-        const opt = statusSelect.createEl("option", { value: status, text: status });
-        if (status === this.filterStatus) opt.selected = true;
-      });
-      statusSelect.addEventListener("change", async () => {
-        this.filterStatus = statusSelect.value;
-        await this.render();
-      });
-
       const prioSelect = toolbar.createEl("select", { cls: "pm-filter-select" });
+      prioSelect.setAttribute("aria-label", "Filter by priority");
       prioSelect.createEl("option", { value: "", text: "All priorities" });
       this.plugin.settings.priorities.forEach((p) => {
         const opt = prioSelect.createEl("option", { value: p, text: p });
@@ -279,6 +273,81 @@ export class ProjectDashboardView extends ItemView {
         await this.render();
       });
     }
+  }
+
+  /** Status sub-tabs under Projects — pick which list to show */
+  private renderProjectStatusTabs(container: HTMLElement, data: AnalyticsData): void {
+    const statuses = this.allStatuses(data.projects.map((p) => p.status));
+    const active = this.ensureProjectsStatus(statuses);
+
+    const tabs = container.createDiv({
+      cls: "pm-db-status-tabs",
+      attr: { role: "tablist", "aria-label": "Project status" },
+    });
+
+    for (const status of statuses) {
+      const count = data.projects.filter((p) => {
+        if (
+          this.filterPriority &&
+          normalizePriority(p.priority) !== normalizePriority(this.filterPriority)
+        ) {
+          return false;
+        }
+        return normalizeStatus(p.status) === status;
+      }).length;
+
+      const isActive = status === active;
+      const btn = tabs.createEl("button", {
+        cls: `pm-db-status-tab${isActive ? " is-active" : ""}`,
+        attr: {
+          role: "tab",
+          "aria-selected": String(isActive),
+          "data-status": status,
+        },
+      });
+      btn.setCssProps({ "--pm-status-color": statusColor(status) });
+      btn.createSpan({ cls: "pm-db-status-tab-label", text: status });
+      btn.createSpan({ cls: "pm-db-status-tab-count", text: String(count) });
+
+      btn.addEventListener("click", async () => {
+        if (this.filterStatus === status) return;
+        this.filterStatus = status;
+        this.scrollTop = 0;
+        await this.render();
+      });
+
+      // Drag a project onto a status tab to move it
+      btn.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        btn.addClass("is-drop-target");
+      });
+      btn.addEventListener("dragleave", () => btn.removeClass("is-drop-target"));
+      btn.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        btn.removeClass("is-drop-target");
+        const projPath = e.dataTransfer?.getData("text/plain");
+        if (!projPath) return;
+        const file = this.app.vault.getAbstractFileByPath(projPath) as TFile | null;
+        if (!file) return;
+        await updateFrontmatterFields(this.app, file, { status: normalizeStatus(status) });
+        await this.plugin.syncArchiveFor(this.currentWorkspace, file);
+        this.filterStatus = status;
+        this.plugin.refreshProjectDashboard();
+        this.plugin.refreshKanban();
+      });
+    }
+  }
+
+  private ensureProjectsStatus(statuses: string[]): string {
+    const current = normalizeStatus(this.filterStatus);
+    if (current && statuses.includes(current)) return current;
+    if (statuses.includes("active")) {
+      this.filterStatus = "active";
+      return "active";
+    }
+    const fallback = statuses[0] ?? "todo";
+    this.filterStatus = fallback;
+    return fallback;
   }
 
   // ── Range arithmetic ────────────────────────────────────────────────
@@ -568,8 +637,20 @@ export class ProjectDashboardView extends ItemView {
   /** Statuses from settings plus any unknown status actually present in the files —
    *  otherwise a task with a hand-written status vanished from the chart yet still counted. */
   private allStatuses(found: string[]): string[] {
-    const known = this.plugin.settings.statuses;
-    const extra = Array.from(new Set(found)).filter((s) => s && !known.includes(s)).sort();
+    const known = this.plugin.settings.statuses.map(normalizeStatus);
+    const knownSet = new Set(known);
+    const extra = Array.from(new Set(found.map(normalizeStatus)))
+      .filter((s) => s && !knownSet.has(s))
+      .sort();
+    return [...known, ...extra];
+  }
+
+  private allPriorities(found: string[]): string[] {
+    const known = this.plugin.settings.priorities.map(normalizePriority);
+    const knownSet = new Set(known);
+    const extra = Array.from(new Set(found.map(normalizePriority)))
+      .filter((p) => p && !knownSet.has(p))
+      .sort();
     return [...known, ...extra];
   }
 
@@ -591,10 +672,7 @@ export class ProjectDashboardView extends ItemView {
 
   private renderPriorityChart(parent: HTMLElement, openTasks: TaskInfo[]): void {
     const card = chartCard(parent, "Priority mix", `${openTasks.length} open tasks`);
-    const known = this.plugin.settings.priorities;
-    const extra = Array.from(new Set(openTasks.map((t) => t.priority)))
-      .filter((p) => p && !known.includes(p)).sort();
-    const segments: StackSegment[] = [...known, ...extra].map((priority) => {
+    const segments: StackSegment[] = this.allPriorities(openTasks.map((t) => t.priority)).map((priority) => {
       const count = openTasks.filter((t) => t.priority === priority).length;
       return {
         label: priority,
@@ -922,105 +1000,167 @@ export class ProjectDashboardView extends ItemView {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  Projects tab — the same status board as before
+  //  Projects tab — one status at a time via sub-tabs
   // ══════════════════════════════════════════════════════════════════════
 
+  private static readonly PRIORITY_RANK: Record<string, number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+  };
+
   private renderProjectsTab(root: HTMLElement, data: AnalyticsData): void {
-    const board = root.createDiv({ cls: "pm-kanban-board" });
+    const statuses = this.allStatuses(data.projects.map((p) => p.status));
+    const status = this.ensureProjectsStatus(statuses);
 
-    for (const status of this.allStatuses(data.projects.map((p) => p.status))) {
-      const col = board.createDiv({ cls: "pm-kanban-col" });
-      col.setCssProps({ "--pm-status-color": statusColor(status) });
-      col.createDiv({ cls: "pm-col-strip" });
-      const header = col.createDiv({ cls: "pm-col-header" });
-      header.createSpan({ cls: "pm-col-title", text: status });
-
-      const colProjects = data.projects.filter((p) => {
-        if (this.filterPriority && p.priority !== this.filterPriority) return false;
-        if (this.filterStatus && p.status !== this.filterStatus) return false;
-        return p.status === status;
+    const projects = data.projects
+      .filter((p) => {
+        if (
+          this.filterPriority &&
+          normalizePriority(p.priority) !== normalizePriority(this.filterPriority)
+        ) {
+          return false;
+        }
+        return normalizeStatus(p.status) === status;
+      })
+      .slice()
+      .sort((a, b) => {
+        const pa = ProjectDashboardView.PRIORITY_RANK[normalizePriority(a.priority)] ?? 9;
+        const pb = ProjectDashboardView.PRIORITY_RANK[normalizePriority(b.priority)] ?? 9;
+        if (pa !== pb) return pa - pb;
+        return a.title.localeCompare(b.title);
       });
 
-      header.createSpan({ cls: "pm-col-count", text: String(colProjects.length) });
+    const list = root.createDiv({ cls: "pm-projects-list" });
+    list.setCssProps({ "--pm-status-color": statusColor(status) });
 
-      const cards = col.createDiv({ cls: "pm-col-cards" });
-      cards.setAttribute("data-status", status);
+    const panel = list.createDiv({
+      cls: "pm-projects-panel",
+      attr: { role: "tabpanel", "aria-label": `${status} projects` },
+    });
 
-      if (!colProjects.length) cards.createDiv({ cls: "pm-col-empty", text: "No projects here" });
-      for (const project of colProjects) this.renderProjectCard(cards, project);
-
-      cards.addEventListener("dragover", (e) => { e.preventDefault(); cards.addClass("pm-drag-over"); });
-      cards.addEventListener("dragleave", () => cards.removeClass("pm-drag-over"));
-      cards.addEventListener("drop", async (e) => {
-        e.preventDefault();
-        cards.removeClass("pm-drag-over");
-        const projPath = e.dataTransfer?.getData("text/plain");
-        if (!projPath) return;
-        const file = this.app.vault.getAbstractFileByPath(projPath) as TFile | null;
-        if (!file) return;
-        await updateFrontmatterFields(this.app, file, { status });
-        await this.plugin.syncArchiveFor(this.currentWorkspace, file);
-        this.plugin.refreshProjectDashboard();
-        this.plugin.refreshKanban();
+    if (!projects.length) {
+      panel.createDiv({
+        cls: "pm-projects-empty",
+        text: this.filterPriority
+          ? `No ${this.filterPriority} projects in ${status}`
+          : `No projects in ${status}`,
       });
+      return;
     }
+
+    const rows = panel.createDiv({ cls: "pm-projects-rows" });
+    for (const project of projects) this.renderProjectRow(rows, project);
   }
 
-  private renderProjectCard(container: HTMLElement, project: ProjectInfo): void {
+  private renderProjectRow(container: HTMLElement, project: ProjectInfo): void {
     const overdue = !!project.due && project.due < todayISO() && !isClosedStatus(project.status);
+    const progress = project.taskCount > 0 ? project.doneCount / project.taskCount : 0;
 
-    const card = container.createDiv({ cls: "pm-task-card" });
-    card.setAttribute("draggable", "true");
-    card.setAttribute("data-path", project.file.path);
-    if (overdue) card.addClass("pm-overdue-card");
-    if (isMutedStatus(project.status)) card.addClass("pm-card-muted");
+    const row = container.createDiv({ cls: "pm-project-row" });
+    row.setAttribute("draggable", "true");
+    row.setAttribute("data-path", project.file.path);
+    row.setAttribute("tabindex", "0");
+    row.setAttribute("role", "button");
+    row.setAttribute(
+      "aria-label",
+      `${project.title}, ${project.priority} priority, ${project.doneCount} of ${project.taskCount} tasks done`
+    );
+    if (overdue) row.addClass("pm-project-row-overdue");
+    if (isMutedStatus(project.status)) row.addClass("pm-card-muted");
 
-    card.addEventListener("dragstart", (e) => {
+    row.addEventListener("dragstart", (e) => {
       e.dataTransfer?.setData("text/plain", project.file.path);
-      card.addClass("pm-dragging");
+      row.addClass("pm-dragging");
     });
-    card.addEventListener("dragend", () => card.removeClass("pm-dragging"));
+    row.addEventListener("dragend", () => row.removeClass("pm-dragging"));
 
-    const priorityClass = `pm-priority-${project.priority.toLowerCase()}`;
-    card.createDiv({ cls: `pm-priority-badge ${priorityClass}`, text: project.priority });
+    const prDot = row.createDiv({ cls: "pm-pr-dot pm-project-row-priority" });
+    prDot.setCssProps({ "--pm-priority-color": priorityColor(project.priority) });
+    prDot.setAttribute("aria-label", `Priority: ${project.priority}`);
+    prDot.setAttribute("title", project.priority);
 
-    const header = card.createDiv({ cls: "pm-project-card-header" });
-    header.createDiv({ cls: "pm-project-title", text: project.title });
+    const main = row.createDiv({ cls: "pm-project-row-main" });
+    const titleLine = main.createDiv({ cls: "pm-project-row-titleline" });
+    titleLine.createSpan({ cls: "pm-project-row-title", text: project.title });
     const notes = this.noted.get(project.file.path);
-    if (notes) renderNoteBadge(header, notes);
+    if (notes) renderNoteBadge(titleLine, notes);
     if (project.archived) {
-      header.createSpan({
+      titleLine.createSpan({
         cls: "pm-archived-badge",
         text: "🗄",
         attr: { "aria-label": "Archived — the file lives in the archive folder" },
       });
     }
-    const chip = header.createDiv({ cls: "pm-project-chip", text: project.status });
-    chip.setCssProps({ "--pm-status-color": statusColor(project.status) });
 
-    const meta = card.createDiv({ cls: "pm-project-meta" });
-    meta.createDiv({ cls: "pm-project-stat", text: `Due: ${project.due || "—"}` });
-    meta.createDiv({
-      cls: "pm-project-stat",
-      text: `Tasks: ${project.doneCount}/${project.taskCount} done`,
+    const meta = main.createDiv({ cls: "pm-project-row-meta" });
+    const dueLabel = project.due
+      ? (overdue ? `Overdue ${this.plugin.calendar.label(project.due)}` : this.plugin.calendar.label(project.due))
+      : "No due date";
+    meta.createSpan({
+      cls: overdue ? "pm-project-row-due is-overdue" : "pm-project-row-due",
+      text: dueLabel,
     });
-    meta.createDiv({ cls: "pm-project-stat", text: `Hours: ${formatHours(project.hours)}` });
+    meta.createSpan({ cls: "pm-meta-dot", attr: { "aria-hidden": "true" } });
+    meta.createSpan({
+      cls: "pm-project-row-hours",
+      text: formatHours(project.hours),
+    });
 
-    const actions = card.createDiv({ cls: "pm-project-actions" });
-    actions.createEl("button", { cls: "pm-btn pm-btn-secondary", text: "Edit" })
-      .addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.plugin.openProjectModal(project.file, this.currentWorkspace);
-      });
-    actions.createEl("button", { cls: "pm-btn", text: "Open note" })
-      .addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.app.workspace.getLeaf(false).openFile(project.file);
-      });
+    const tasks = row.createDiv({ cls: "pm-project-row-tasks" });
+    const bar = tasks.createDiv({ cls: "pm-project-progress" });
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", String(project.taskCount));
+    bar.setAttribute("aria-valuenow", String(project.doneCount));
+    bar.setAttribute(
+      "aria-label",
+      project.taskCount
+        ? `${project.doneCount} of ${project.taskCount} tasks done`
+        : "No tasks yet"
+    );
+    const fill = bar.createDiv({ cls: "pm-project-progress-fill" });
+    fill.setCssProps({ "--pm-progress": `${Math.round(progress * 100)}%` });
+    tasks.createSpan({
+      cls: "pm-project-row-taskcount",
+      text: project.taskCount ? `${project.doneCount}/${project.taskCount}` : "0 tasks",
+    });
 
-    card.addEventListener("click", () => this.plugin.openProjectModal(project.file, this.currentWorkspace));
+    const actions = row.createDiv({ cls: "pm-project-row-actions" });
+    const openNote = actions.createEl("button", {
+      cls: "pm-icon-btn",
+      attr: { "aria-label": "Open project note", title: "Open note" },
+    });
+    setIcon(openNote, "file-text");
+    openNote.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.app.workspace.getLeaf(false).openFile(project.file);
+    });
 
-    card.addEventListener("contextmenu", (e) => {
+    const editBtn = actions.createEl("button", {
+      cls: "pm-icon-btn",
+      attr: { "aria-label": "Edit project", title: "Edit" },
+    });
+    setIcon(editBtn, "pencil");
+    editBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.plugin.openProjectModal(project.file, this.currentWorkspace);
+    });
+
+    const openCard = () => this.plugin.openProjectModal(project.file, this.currentWorkspace);
+    row.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest(".pm-project-row-actions")) return;
+      openCard();
+    });
+    row.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if ((e.target as HTMLElement).closest(".pm-project-row-actions")) return;
+      e.preventDefault();
+      openCard();
+    });
+
+    row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       const menu = new Menu();
       menu.addItem((item) =>
@@ -1033,6 +1173,19 @@ export class ProjectDashboardView extends ItemView {
           this.plugin.openProjectModal(project.file, this.currentWorkspace);
         })
       );
+      menu.addSeparator();
+      for (const status of this.plugin.settings.statuses.map(normalizeStatus)) {
+        if (status === normalizeStatus(project.status)) continue;
+        menu.addItem((item) =>
+          item.setTitle(`Move to ${status}`).setIcon("arrow-right").onClick(async () => {
+            await updateFrontmatterFields(this.app, project.file, { status });
+            await this.plugin.syncArchiveFor(this.currentWorkspace, project.file);
+            this.filterStatus = status;
+            this.plugin.refreshProjectDashboard();
+            this.plugin.refreshKanban();
+          })
+        );
+      }
       menu.showAtMouseEvent(e);
     });
   }

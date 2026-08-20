@@ -24,6 +24,16 @@ export function normalizeStatus(status: unknown): string {
   return String(status ?? "").trim().toLowerCase();
 }
 
+/** Same rules as status — priorities are compared case-insensitively everywhere. */
+export function normalizePriority(priority: unknown): string {
+  return String(priority ?? "").trim().toLowerCase();
+}
+
+/** Deduped, canonical list for settings / columns / filters. */
+export function normalizeList(values: string[], normalize: (v: unknown) => string): string[] {
+  return [...new Set(values.map(normalize).filter(Boolean))];
+}
+
 // The palette's remaining slots serve user-defined statuses — a new colour is never
 // invented, one of these eight is chosen.
 const FALLBACK_SLOTS = [4, 5, 6];
@@ -52,7 +62,7 @@ export function statusColor(status: string): string {
 }
 
 export function priorityColor(priority: string): string {
-  return PRIORITY_TOKENS[(priority ?? "").toLowerCase()] ?? "var(--text-faint)";
+  return PRIORITY_TOKENS[normalizePriority(priority)] ?? "var(--text-faint)";
 }
 
 // These statuses no longer need attention every time — they are shown muted

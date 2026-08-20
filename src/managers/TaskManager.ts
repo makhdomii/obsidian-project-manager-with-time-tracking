@@ -3,6 +3,7 @@ import { Workspace, TaskFrontmatter } from "../types";
 import { linkSlug, slugify, yamlString } from "../utils/FrontmatterUtils";
 import { todayString } from "../utils/DateUtils";
 import { isUnderAnyFolder, taskFolders } from "../utils/WorkspacePaths";
+import { appendTimeLogRow } from "../utils/TimeLog";
 
 export class TaskManager {
   constructor(private app: App) {}
@@ -47,6 +48,8 @@ ${extraLines}---
 
 | Date | Hours | Start | End |
 |------|-------|-------|-----|
+
+## Updates
 `;
 
     const file = await this.app.vault.create(path, frontmatter);
@@ -89,8 +92,6 @@ ${extraLines}---
     const currentHours = Number(fm.total_hours ?? 0);
     const updatedHours = Math.round((currentHours + newHours) * 100) / 100;
 
-    // Parse existing days
-    const existingDays = new Set<string>();
     const dateStr = todayString();
     const startStr = startTime.toISOString();
     const endStr = endTime.toISOString();
@@ -99,16 +100,12 @@ ${extraLines}---
       fmatter.total_hours = updatedHours;
     });
 
-    // Append row to time log table in content
+    // Insert inside the Time Log table — never append at EOF (Updates lives there)
     await app.vault.process(file, (content) => {
       const row = `| ${dateStr} | ${newHours} | ${startStr} | ${endStr} |`;
-      if (content.includes("| Date | Hours | Start | End |")) {
-        return content + row + "\n";
-      }
-      return content + `\n## Time Log\n\n| Date | Hours | Start | End |\n|------|-------|-------|-----|\n${row}\n`;
+      return appendTimeLogRow(content, row);
     });
 
-    // Recount days
     await this.recalculateDaysCount(app, file);
   }
 

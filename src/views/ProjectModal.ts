@@ -2,7 +2,7 @@ import { App, Modal, TFile, Notice, Setting } from "obsidian";
 import ProjectManagerPlugin from "../main";
 import { Workspace } from "../types";
 import { renameHeading, updateFrontmatterFields } from "../utils/FrontmatterUtils";
-import { normalizeStatus } from "../utils/StatusColors";
+import { normalizeStatus, normalizePriority } from "../utils/StatusColors";
 
 export class ProjectModal extends Modal {
   plugin: ProjectManagerPlugin;
@@ -34,7 +34,7 @@ export class ProjectModal extends Modal {
       this.title = fm.title ?? file.basename;
       this.originalTitle = this.title;
       this.status = normalizeStatus(fm.status ?? "todo");
-      this.priority = fm.priority ?? "medium";
+      this.priority = normalizePriority(fm.priority ?? "medium");
       this.due = fm.due ?? "";
     }
   }
@@ -97,20 +97,22 @@ export class ProjectModal extends Modal {
   }
 
   async save(): Promise<void> {
+    const status = normalizeStatus(this.status);
+    const priority = normalizePriority(this.priority);
     if (this.isNew) {
       await this.plugin.projectManager.createProject(
         this.ws,
         this.title,
-        this.status,
-        this.priority,
+        status,
+        priority,
         this.due
       );
       new Notice(`Project created: ${this.title}`);
     } else if (this.file) {
       await updateFrontmatterFields(this.app, this.file, {
         title: this.title,
-        status: this.status,
-        priority: this.priority,
+        status,
+        priority,
         due: this.due,
       });
       await renameHeading(this.app, this.file, this.originalTitle, this.title);

@@ -16,6 +16,7 @@ import { Calendar, createCalendar } from "./utils/Calendar";
 import { defaultArchiveFolder } from "./utils/WorkspacePaths";
 import { NoteScanner } from "./utils/NoteContent";
 import { resetTimerWithConfirm } from "./views/TimerBar";
+import { normalizeList, normalizePriority, normalizeStatus } from "./utils/StatusColors";
 
 export default class ProjectManagerPlugin extends Plugin {
   settings: ProjectManagerSettings;
@@ -231,19 +232,27 @@ export default class ProjectManagerPlugin extends Plugin {
    * data.json keeps "not started" forever and the board columns stop matching the
    * migrated notes — meaning no task is drawn at all. The old name is *replaced*
    * here, not supported alongside.
+   *
+   * Priorities are lowercased the same way so filters and charts stay in sync
+   * with note frontmatter.
    */
   private async migrateStatusNames(): Promise<void> {
     const RENAMES: Record<string, string> = {
       "not started": "todo",
       "in progress": "active",
     };
-    const before = this.settings.statuses.join("\u0000");
+    const beforeStatuses = this.settings.statuses.join("\u0000");
+    const beforePriorities = this.settings.priorities.join("\u0000");
     const renamed = this.settings.statuses.map((s) => {
-      const key = String(s).trim().toLowerCase();
+      const key = normalizeStatus(s);
       return RENAMES[key] ?? key;
     });
     this.settings.statuses = [...new Set(renamed)];
-    if (this.settings.statuses.join("\u0000") !== before) {
+    this.settings.priorities = normalizeList(this.settings.priorities, normalizePriority);
+    if (
+      this.settings.statuses.join("\u0000") !== beforeStatuses ||
+      this.settings.priorities.join("\u0000") !== beforePriorities
+    ) {
       await this.savePluginData();
     }
   }
@@ -271,6 +280,7 @@ export default class ProjectManagerPlugin extends Plugin {
     const existing = this.app.workspace.getLeavesOfType(KANBAN_VIEW_TYPE);
     if (existing.length > 0) {
       this.app.workspace.revealLeaf(existing[0]);
+      await (existing[0].view as KanbanView).render();
       return;
     }
     const leaf = this.app.workspace.getLeaf(false);
@@ -289,8 +299,10 @@ export default class ProjectManagerPlugin extends Plugin {
     new TaskModal(this.app, this, ws, file).open();
   }
 
-  openNewTaskModal(ws: Workspace): void {
-    new TaskModal(this.app, this, ws, null).open();
+  openNewTaskModal(ws: Workspace, projectSlug?: string): void {
+    const modal = new TaskModal(this.app, this, ws, null);
+    if (projectSlug) modal.projectSlug = projectSlug;
+    modal.open();
   }
 
   openProjectModal(file: TFile, ws: Workspace): void {
@@ -305,6 +317,7 @@ export default class ProjectManagerPlugin extends Plugin {
     const existing = this.app.workspace.getLeavesOfType(PROJECT_DASHBOARD_VIEW_TYPE);
     if (existing.length > 0) {
       this.app.workspace.revealLeaf(existing[0]);
+      void (existing[0].view as ProjectDashboardView).render();
       return;
     }
     const leaf = this.app.workspace.getLeaf(false);

@@ -30,3 +30,4 @@ yarn-error.log*
 *.tmp
 *.temp
 .cache/
+_*-bundle.cjs
